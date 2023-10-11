@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "LDTK2GMS2Pipeline": {
+      "commandName": "Project",
+      "workingDirectory": "E:\\Work\\GMS2\\Youki\\working_files\\ldtk",
+      "hotReloadEnabled": false
+    }
+  }
+}
