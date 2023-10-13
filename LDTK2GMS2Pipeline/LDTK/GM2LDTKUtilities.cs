@@ -8,6 +8,8 @@ namespace LDTK2GMS2Pipeline.LDTK;
 
 public static class GM2LDTKUtilities
 {
+    #region Entities
+
     public static Entity CreateEntity( LDTKProject _project, GMObject _object, Tileset _tileset, SpriteAtlas _atlas )
     {
         Entity entity = new()
@@ -28,7 +30,6 @@ public static class GM2LDTKUtilities
         entity.pivotY = rect.PivotY;
 
         entity.tilesetId = _tileset.uid;
-        entity.tileRenderMode = "FullSizeUncropped";
 
         entity.width = _atlas.RoundToGrid( rect.Width - rect.EmptyLeft - rect.EmptyRight );
         entity.height = _atlas.RoundToGrid( rect.Height - rect.EmptyTop - rect.EmptyBottom );
@@ -41,6 +42,19 @@ public static class GM2LDTKUtilities
             w = rect.Width,
             h = rect.Height
         };
+
+        bool use9Slice = _object.spriteId?.nineSlice?.enabled ?? false;
+
+        entity.resizableX = entity.resizableY = use9Slice;
+
+        if (!use9Slice )
+            entity.tileRenderMode = "FullSizeUncropped";
+        else
+        {
+            entity.tileRenderMode = "NineSlice";
+            var sets = _object.spriteId.nineSlice;
+            entity.nineSliceBorders = new int[] { sets.top, sets.right, sets.bottom, sets.left };
+        }
 
         return entity;
     }
@@ -60,11 +74,48 @@ public static class GM2LDTKUtilities
         }
     }
 
+    private static readonly GMObjectProperty XScaleProperty = new ()
+    {
+        varType = eObjectPropertyType.Real,
+        varName = "image_xscale",
+        value = "1"
+    };
+
+    private static readonly GMObjectProperty YScaleProperty = new()
+    {
+        varType = eObjectPropertyType.Real,
+        varName = "image_yscale",
+        value = "1"
+    };
+
+    private static readonly GMObjectProperty AngleProperty = new()
+    {
+        varType = eObjectPropertyType.Real,
+        varName = "image_angle",
+        value = "0"
+    };
+
+    private static readonly GMObjectProperty BlendProperty = new()
+    {
+        varType = eObjectPropertyType.Color,
+        varName = "image_blend",
+        value = 0xFFFFFF.ToString()
+    };
+
     /// <summary>
     /// Returns all properties that given object has, including object they are defined in
     /// </summary>
-    public static IEnumerable<GMObjectPropertyInfo> EnumerateAllProperties( GMObject _object )
+    public static IEnumerable<GMObjectPropertyInfo> EnumerateAllProperties( GMObject _object, MetaData.Options _options )
     {
+        if ( _options.ImportImageXScale)
+            yield return new GMObjectPropertyInfo( XScaleProperty, _object);
+        if ( _options.ImportImageYScale )
+            yield return new GMObjectPropertyInfo( YScaleProperty, _object );
+        if ( _options.ImportImageAngle )
+            yield return new GMObjectPropertyInfo( AngleProperty, _object );
+        if ( _options.ImportImageBlend )
+            yield return new GMObjectPropertyInfo( BlendProperty, _object );
+
         foreach ( GMObject obj in EnumerateObjectHierarchy( _object ) )
         {
             foreach ( GMObjectProperty property in obj.properties )
@@ -100,9 +151,9 @@ public static class GM2LDTKUtilities
 
     public static void UpdateEntity( LDTKProject _project, GMObject _object, Entity _entity, bool _skipAddEntityLogs )
     {
-        List<GMObjectPropertyInfo> definedProperties = EnumerateAllProperties( _object ).ToList();
+        List<GMObjectPropertyInfo> definedProperties = EnumerateAllProperties( _object, _project.Meta.options ).ToList();
 
-        MetaData.ObjectInfo meta = _project.Meta.ObjectGet( _entity.identifier )!;
+        MetaData.ObjectInfo meta = _project.Meta.Get<MetaData.ObjectInfo>( _entity.identifier )!;
 
         RemoveMissingProperties( meta, definedProperties.Select( t => t.Property) );
 
@@ -288,6 +339,8 @@ public static class GM2LDTKUtilities
             };
         }
     }
+
+    #endregion
 
     public static string ToValueEnumValue( string _input )
     {

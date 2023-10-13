@@ -8,6 +8,8 @@ using ProjectManager;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using YoYoStudio.Resources;
+using System.Reflection;
+using static ProjectManager.GameMaker.GMS2Project;
 
 namespace LDTK2GMS2Pipeline;
 
@@ -40,6 +42,11 @@ public static class YoYoProjectLoader
         } );
 
         return loadingWait.Task;
+    }
+
+    public static string GetFullPath( string _path, GMProject? _project = null )
+    {
+        return System.IO.Path.Combine( Path.GetDirectoryName( ProjectInfo.GetProjectPath( _project ?? ProjectInfo.Current ) ), _path );
     }
 
     class PlaceholderLicensingModule : ILicenseModulesSource
