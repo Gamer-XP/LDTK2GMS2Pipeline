@@ -312,13 +312,25 @@ public class SpriteAtlas
         var sprite = _item.Sprite;
         Vector2 relativePivot = GetSnappedPivot( sprite, sprite.xorigin - trimRect.Left, sprite.yorigin - trimRect.Top, trimRect.Width, trimRect.Height );
 
-        var left = CeilToGrid( sprite.xorigin - trimRect.Left );
-        var right = CeilToGrid( trimRect.Left + trimRect.Width - sprite.xorigin );
-        var top = CeilToGrid( sprite.yorigin - trimRect.Top );
-        var bottom = CeilToGrid( trimRect.Height + trimRect.Top - sprite.yorigin );
+        int width, height;
 
-        int width = Math.Abs(relativePivot.X - 0.5f) < 0.01f? Math.Max(left, right) * 2 : (relativePivot.X > 0.5f? left : right);
-        int height = Math.Abs( relativePivot.Y - 0.5f ) < 0.01f ? Math.Max( top, bottom ) * 2 : (relativePivot.Y > 0.5f ? top : bottom);
+        // Use small centered sprites as is
+        if (sprite.width <= cellSize && sprite.height <= cellSize && sprite.xorigin == sprite.width/2 && sprite.yorigin == sprite.height/2)
+        {
+            width = cellSize;
+            height = cellSize;
+        }
+        else
+        {
+            var left = CeilToGrid( sprite.xorigin - trimRect.Left );
+            var right = CeilToGrid( trimRect.Left + trimRect.Width - sprite.xorigin );
+            var top = CeilToGrid( sprite.yorigin - trimRect.Top );
+            var bottom = CeilToGrid( trimRect.Height + trimRect.Top - sprite.yorigin );
+
+            width = Math.Abs( relativePivot.X - 0.5f ) < 0.01f ? Math.Max( left, right ) * 2 : (relativePivot.X > 0.5f ? left : right);
+            height = Math.Abs( relativePivot.Y - 0.5f ) < 0.01f ? Math.Max( top, bottom ) * 2 : (relativePivot.Y > 0.5f ? top : bottom);
+        }
+        
 
         int maxSize = Math.Max(width, height);
         if (maxSize <= cellSize * 8)
@@ -344,9 +356,13 @@ public class SpriteAtlas
         rectangle.Width = width;
         rectangle.Height = height;
         rectangle.EmptyLeft = Math.Max(0, putX );
-        rectangle.EmptyTop = Math.Max(0, putY );
         rectangle.EmptyRight = Math.Max( 0, width - putX - trimRect.Width );
+        rectangle.EmptyTop = Math.Max(0, putY );
         rectangle.EmptyBottom = Math.Max( 0, height - putY - trimRect.Height );
+        rectangle.PaddingLeft = putX - trimRect.Left;
+        rectangle.PaddingTop = putY - trimRect.Top;
+        rectangle.PaddingRight = width - putX - trimRect.Width - sprite.width + trimRect.Right;
+        rectangle.PaddingBottom = height - putY - trimRect.Height - sprite.height + trimRect.Bottom;
         rectangle.PivotX = relativePivot.X;
         rectangle.PivotY = relativePivot.Y;
 
@@ -415,16 +431,6 @@ public class SpriteAtlas
         return cellSize * Math.Max(1, (int) MathF.Round( _value / (float) cellSize ) );
     }
 
-    static Size GetUpperPOTSize( int _width, int _height )
-    {
-        return new Size( GetUpperPOTValue( _width ), GetUpperPOTValue( _height ) );
-    }
-
-    static int GetUpperPOTValue( int _value )
-    {
-        return (int) Math.Pow( 2, Math.Ceiling( Math.Log( _value ) / Math.Log( 2 ) ) );
-    }
-
     [System.Serializable]
     private class AtlasMeta
     {
@@ -442,6 +448,12 @@ public class SpriteAtlas
         public int Width { get; set; }
         public int Height { get; set; }
 
+        public float PivotX { get; set; }
+        public float PivotY { get; set; }
+
+        public int[] Padding { get; set; } = new int[4];
+        public int[] Empty { get; set; } = new int[4];
+
         [JsonIgnore]
         public int Left => X;
         [JsonIgnore]
@@ -451,13 +463,61 @@ public class SpriteAtlas
         [JsonIgnore]
         public int Bottom => Y + Height;
 
-        public int EmptyLeft { get; set; }
-        public int EmptyRight { get; set; }
-        public int EmptyTop { get; set; }
-        public int EmptyBottom { get; set; }
+        [JsonIgnore]
+        public int PaddingLeft
+        {
+            get => Padding[0];
+            set => Padding[0] = value;
+        }
 
-        public float PivotX { get; set; }
-        public float PivotY { get; set; }
+        [JsonIgnore]
+        public int PaddingRight
+        {
+            get => Padding[1];
+            set => Padding[1] = value;
+        }
+
+        [JsonIgnore]
+        public int PaddingTop
+        {
+            get => Padding[2];
+            set => Padding[2] = value;
+        }
+
+        [JsonIgnore]
+        public int PaddingBottom
+        {
+            get => Padding[3];
+            set => Padding[3] = value;
+        }
+
+        [JsonIgnore]
+        public int EmptyLeft
+        {
+            get => Empty[0];
+            set => Empty[0] = value;
+        }
+
+        [JsonIgnore]
+        public int EmptyRight
+        {
+            get => Empty[1];
+            set => Empty[1] = value;
+        }
+
+        [JsonIgnore]
+        public int EmptyTop
+        {
+            get => Empty[2];
+            set => Empty[2] = value;
+        }
+
+        [JsonIgnore]
+        public int EmptyBottom
+        {
+            get => Empty[3];
+            set => Empty[3] = value;
+        }
 
         public AtlasRectangle SetFrom( PackingRectangle _source  )
         {
@@ -477,7 +537,7 @@ public class SpriteAtlas
         {
             if (ReferenceEquals(null, other)) return false;
             if (ReferenceEquals(this, other)) return true;
-            return X == other.X && Y == other.Y && Width == other.Width && Height == other.Height && EmptyLeft == other.EmptyLeft && EmptyRight == other.EmptyRight && EmptyTop == other.EmptyTop && EmptyBottom == other.EmptyBottom && PivotX.Equals(other.PivotX) && PivotY.Equals(other.PivotY);
+            return X == other.X && Y == other.Y && Width == other.Width && Height == other.Height;
         }
 
         public override bool Equals(object? obj)
@@ -495,12 +555,6 @@ public class SpriteAtlas
             hashCode.Add(Y);
             hashCode.Add(Width);
             hashCode.Add(Height);
-            hashCode.Add(EmptyLeft);
-            hashCode.Add(EmptyRight);
-            hashCode.Add(EmptyTop);
-            hashCode.Add(EmptyBottom);
-            hashCode.Add(PivotX);
-            hashCode.Add(PivotY);
             return hashCode.ToHashCode();
         }
     }

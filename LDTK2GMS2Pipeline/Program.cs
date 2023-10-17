@@ -4,6 +4,7 @@ using ProjectManager;
 using SixLabors.ImageSharp;
 using Spectre.Console;
 using System;
+using System.Collections.Generic;
 using YoYoStudio.Resources;
 using static LDTK2GMS2Pipeline.LDTK.LDTKProject;
 
@@ -20,7 +21,7 @@ internal class Program
 
         var ldtkProjectTask = LoadLDTKProject( false );
         await ldtkProjectTask;
-        var gmProjectTask = YoYoProjectLoader.LoadGMProject();
+        var gmProjectTask = GMProjectUtilities.LoadGMProject();
 
         await Task.WhenAll( ldtkProjectTask, gmProjectTask );
 
@@ -47,7 +48,7 @@ internal class Program
 
         bool atlasUpdated = await atlas.Update();
 
-        var tileset = GetAtlasTileset( ldtkProject, atlasUpdated, atlas );
+        Tileset tileset = GetAtlasTileset( ldtkProject, atlasUpdated, atlas );
 
         if ( atlasUpdated )
             UpdateAtlasReferences( ldtkProject, atlas, tileset );
@@ -86,30 +87,7 @@ internal class Program
     {
         foreach ( GMTileSet gmTileset in _tilesets )
         {
-            Tileset? tileset;
-            if ( !_project.Meta.GetOrNew( gmTileset.name, out MetaData.TilesetInfo info ) )
-            {
-                tileset = _project.defs.tilesets.Find( t => t.identifier.Equals( gmTileset.name, StringComparison.CurrentCultureIgnoreCase ) );
-                if ( tileset != null )
-                {
-                    AnsiConsole.MarkupLineInterpolated( $"Found a new tileset [teal]{gmTileset.name}[/]" );
-                }
-                else
-                {
-                    tileset = new Tileset()
-                    {
-                        uid = _project.GetNewUid(),
-                        identifier = gmTileset.name
-                    };
-                    _project.defs.tilesets.Add( tileset );
-                    AnsiConsole.MarkupLineInterpolated( $"Created a new tileset [teal]{gmTileset.name}[/]" );
-                }
-
-                info.uid = tileset.uid;
-            }
-            else
-                tileset = _project.defs.tilesets.FirstOrDefault( t => t.uid == info.uid );
-
+            _project.CreateOrExisting<Tileset>(gmTileset.name, out var tileset);
             if ( tileset == null )
                 continue;
 
@@ -130,45 +108,31 @@ internal class Program
             tileset.spacing = gmTileset.tilehsep;
             tileset.padding = gmTileset.tilexoff;
 
-            string tilesetFullPath = YoYoProjectLoader.GetFullPath( gmTileset.spriteId.GetCompositePaths()[0] );
+            string tilesetFullPath = GMProjectUtilities.GetFullPath( gmTileset.spriteId.GetCompositePaths()[0] );
             tileset.relPath = Path.GetRelativePath( _project.ProjectDirectory, tilesetFullPath );
         }
     }
 
-    private static unsafe void UpdateLevels( GMProject _gmProject, LDTKProject _project, List<GMRoom> _rooms )
+    private static void UpdateLevels( GMProject _gmProject, LDTKProject _project, List<GMRoom> _rooms )
     {
         int GetMaxX()
         {
             return _project.levels.Max( t => t.worldX + t.pxWid );
         }
 
-        Dictionary<GMObject, Entity> entityDict = _project.Meta.CreateMapping<GMObject, MetaData.ObjectInfo, Entity>(_gmProject);
-        Dictionary<GMTileSet, Tileset> tilesetDict = _project.Meta.CreateMapping<GMTileSet, MetaData.TilesetInfo, Tileset>( _gmProject );
+        var entityDict = _project.CreateResourceMap<GMObject, Entity>(_gmProject);
+        var tilesetDict = _project.CreateResourceMap<GMTileSet, Tileset>( _gmProject );
+
+        var flipEnum = LDTKProject.GetFlipEnum(_project);
 
         foreach ( GMRoom room in _rooms )
         {
             if ( room.name != "rm_combat_test" )
                 continue;
 
-            LDTKProject.Level? level;
-            if ( !_project.Meta.GetOrNew<MetaData.LevelInfo>( room.name, out var info ) )
+            if (_project.CreateOrExisting<Level>(room.name, out var level))
             {
-                level = new LDTKProject.Level
-                {
-                    uid = _project.GetNewUid(),
-                    identifier = room.name
-                };
-
-                info.uid = level.uid;
                 level.worldX = GetMaxX();
-
-                _project.levels.Add( level );
-
-                AnsiConsole.MarkupLineInterpolated( $"Created a new level [teal]{room.name}[/]" );
-            }
-            else
-            {
-                level = _project.levels.Find( t => t.uid == info.uid );
             }
 
             if ( level == null )
@@ -203,7 +167,7 @@ internal class Program
 
                 if ( expectedLayerType != layerDef.type )
                 {
-                    AnsiConsole.MarkupLineInterpolated( $"[yellow]Layer types do not match for [green]{layerDef.identifier}[/] in [teal]{room.name}[/]: {expectedLayerType} vs {layerDef.type}[/]" );
+                    AnsiConsole.MarkupLineInterpolated( $"[yellow]Layer types do not match for [green]{layerDef.identifier}[/] in [olive]{room.name}[/]: {expectedLayerType} vs {layerDef.type}[/]" );
                     continue;
                 }
 
@@ -235,26 +199,71 @@ internal class Program
                         layer.entityInstances.Clear();
                         foreach ( GMRInstance gmInstance in instLayer.instances )
                         {
-                            if ( gmInstance.ignore || !entityDict.TryGetValue(gmInstance.objectId, out var entityType))
+                            if ( gmInstance.ignore)
                                 continue;
 
-                            int posX = (int)gmInstance.x;
-                            int posY = (int)gmInstance.y;
+                            if (!entityDict.TryGetValue(gmInstance.objectId, out var entityData))
+                            {
+                                AnsiConsole.MarkupLineInterpolated($"[yellow]Unable to find unity matching object [teal]{gmInstance.objectId.name}[/] for level [olive]{room.name}[/][/]");
+                                continue;
+                            }
+
+                            var entityType = entityData;
+
+                            bool GetField( string _name, out Field.MetaData _meta )
+                            {
+                                return entityData.Meta.Properties.TryGetValue(_name, out _meta!);
+                            }
+
+                            int width = (int)(entityType.width * MathF.Abs(gmInstance.scaleX));
+                            int height = (int)(entityType.height * MathF.Abs(gmInstance.scaleY));
+                            int posX = (int) gmInstance.x;
+                            int posY = (int) gmInstance.y;
 
                             Level.Layer.EntityInstance instance = new();
-        
+                            instance.__pivot = new List<double>() { entityType.pivotX, entityType.pivotY };
+
+                            if ( gmInstance.flipX )
+                                posX += (int)((entityType.pivotX - 0.5f) * 2f * width);
+                            if ( gmInstance.flipY )
+                                posY += (int) ((entityType.pivotY - 0.5f) * 2f * height);
+
                             instance.__identifier = entityType.identifier;
                             instance.defUid = entityType.uid;
                             instance.iid = Guid.NewGuid().ToString();
-                            instance.__pivot = new List<double>() { entityType.pivotX, entityType.pivotY };
+                            
                             instance.__tags = entityType.tags;
                             instance.__tile = entityType.tileRect;
                             instance.px = new List<int>() { posX, posY };
                             instance.__grid = new List<int>() { posX / layerDef.gridSize, posY / layerDef.gridSize };
                             instance.__worldX = level.worldX + posX;
                             instance.__worldY = level.worldY + posY;
-                            instance.width = (int) (entityType.width * MathF.Abs( gmInstance.scaleX ));
-                            instance.height = (int) (entityType.height * MathF.Abs( gmInstance.scaleY ));
+                            instance.width = width;
+                            instance.height = height;
+
+                            int flipIndex = (gmInstance.flipX ? 1 : 0) | (gmInstance.flipY ? 2 : 0);
+
+                            if (flipIndex > 0)
+                            {
+                                if ( GetField( LDTKProject.FlipStateEnumName,  out var fieldMeta ))
+                                    instance.fieldInstances.Add(new Level.Layer.EntityInstance.FieldInstance( fieldMeta.Resource, DefaultOverride.IdTypes.V_String, flipEnum.values[flipIndex].id ));
+                            }
+
+                            foreach (GMOverriddenProperty propOverride in gmInstance.properties)
+                            {
+                                if ( !GetField( propOverride.varName, out var meta ) )
+                                    continue;
+
+                                if (!LDTKProject.ConvertDefaultValue(propOverride.propertyId, propOverride.value, out var result, meta.type) )
+                                {
+                                    AnsiConsole.MarkupLineInterpolated( $"[red]Error processing value '{propOverride.value}' for field [green]{propOverride.varName} [[{propOverride.propertyId.varType}]][/] in [teal]{gmInstance.objectId.name}[/].[/]" );
+                                    continue;
+                                }
+
+                                var field = new Level.Layer.EntityInstance.FieldInstance(meta.Resource);
+                                field.SetValue( result );
+                                instance.fieldInstances.Add( field );
+                            }
 
                             layer.entityInstances.Add( instance );
                         }
@@ -263,7 +272,7 @@ internal class Program
 
                     case GMRTileLayer tileLayer:
 
-                        Tileset? tileset = tileLayer.tilesetId != null ? tilesetDict.GetValueOrDefault(tileLayer.tilesetId) : null;
+                        Tileset? tileset = tilesetDict.GetValueOrDefault(tileLayer.tilesetId);
 
                         if (tileset == null)
                         {
@@ -276,6 +285,7 @@ internal class Program
 
                         layer.__tilesetRelPath = tileset.relPath;
                         layer.__tilesetDefUid = tileset.uid;
+                        layer.overrideTilesetUid = tileset.uid;
 
                         layer.pxOffsetX = tileLayer.x;
                         layer.pxOffsetY = tileLayer.y;
@@ -318,28 +328,17 @@ internal class Program
 
     private static Tileset GetAtlasTileset( LDTKProject _ldtkProject, bool _atlasUpdated, SpriteAtlas _atlas )
     {
-        var tileset = _ldtkProject.defs.tilesets.Find( t =>
-            t.identifier.Equals( EntityAtlasName, StringComparison.InvariantCultureIgnoreCase ) );
+        _atlasUpdated |= _ldtkProject.CrateOrExistingForced(EntityAtlasName, out Tileset tileset);
 
-        if ( !_atlasUpdated && tileset != null )
+        if ( !_atlasUpdated )
             return tileset;
 
-        if ( tileset == null )
-        {
-            tileset = new LDTKProject.Tileset();
-            _ldtkProject.defs.tilesets.Add( tileset );
-
-            tileset.identifier = EntityAtlasName;
-            tileset.relPath = $"{IconFolder}/{EntityAtlasName}.png";
-            tileset.uid = _ldtkProject.GetNewUid();
-        }
-
+        tileset.relPath = $"{IconFolder}/{EntityAtlasName}.png";
         tileset.pxWid = _atlas.Width;
         tileset.pxHei = _atlas.Height;
         tileset.tileGridSize = 16;
         tileset.__cWid = tileset.pxWid / tileset.tileGridSize;
         tileset.__cHei = tileset.pxHei / tileset.tileGridSize;
-        tileset.cachedPixelData = new LDTKProject.Tileset.CachedPixelData();
 
         return tileset;
     }
@@ -371,62 +370,29 @@ internal class Program
 
     private static void UpdateEntities( List<GMObject> _objects, LDTKProject _ldtkProject, SpriteAtlas _atlas, Tileset _atlasTileset )
     {
-        static bool IsParentOf( GMObject _object, GMObject _parent )
-        {
-            GMObject? parentToCheck = _object.parentObjectId;
-            while ( parentToCheck != null )
-            {
-                if ( parentToCheck == _parent )
-                    return true;
-                parentToCheck = parentToCheck.parentObjectId;
-            }
-
-            return false;
-        }
-
         var sortedList = _objects.OrderBy( t => t.name ).ToList();
         sortedList.Sort( ( l, r ) =>
         {
-            if ( IsParentOf( l, r ) )
+            if ( GMProjectUtilities.IsInheritedFrom( l, r ) )
                 return 1;
-            if ( IsParentOf( r, l ) )
+            if ( GMProjectUtilities.IsInheritedFrom( r, l ) )
                 return -1;
             return 0;
         } );
 
         foreach ( var levelObject in _objects.OrderBy( t => t.name ) )
         {
-            Entity? entity;
-            if ( !_ldtkProject.Meta.GetOrNew<MetaData.ObjectInfo>( levelObject.name, out var objectInfo ) )
+            bool isNew = _ldtkProject.CreateOrExisting(levelObject.name, out Entity ? entity );
+
+            if (entity != null)
             {
-                entity = _ldtkProject.defs.entities.Find( t =>
-                    t.identifier.Equals( levelObject.name, StringComparison.InvariantCultureIgnoreCase ) );
-
-                bool isNew = entity == null;
-                if ( entity == null )
-                {
-                    entity = GM2LDTKUtilities.CreateEntity( _ldtkProject, levelObject, _atlasTileset, _atlas );
-                    AnsiConsole.MarkupLineInterpolated( $"Created a new entity [teal]{entity.identifier}[/]" );
-                }
-                else
-                {
-                    AnsiConsole.MarkupLineInterpolated( $"Found a matching entity [teal]{entity.identifier}[/]" );
-                }
-
-                objectInfo.uid = entity.uid;
-
-                GM2LDTKUtilities.UpdateEntity( _ldtkProject, levelObject, entity, isNew );
-
-                continue;
+                if (isNew)
+                    entity.Init( levelObject, _atlasTileset, _atlas );
+                _ldtkProject.UpdateEntity(entity, levelObject, isNew);
             }
-
-            // Do not recreate entities if they were removed in LDTK project later
-            entity = _ldtkProject.defs.entities.Find( t => t.uid == objectInfo.uid );
-            if ( entity != null )
-                GM2LDTKUtilities.UpdateEntity( _ldtkProject, levelObject, entity, false );
         }
 
-        _ldtkProject.Meta.RemoveMissing<MetaData.ObjectInfo>( _objects.Select( t => t.name ), _s =>
+        _ldtkProject.RemoveUnusedMeta<Entity.MetaData>( _objects.Select( t => t.name ), _s =>
         {
             AnsiConsole.MarkupLineInterpolated( $"Object [teal]{_s}[/] no longer exists in the GM project. Removing from meta..." );
         } );
