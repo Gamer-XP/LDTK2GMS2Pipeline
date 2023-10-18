@@ -27,7 +27,7 @@ public partial class LDTKProject : LDTKProject.IResourceContainer
     public List<Level> levels { get; private set; } = new();
 
     [JsonIgnore]
-    public LDTKMetaData MetaData { get; private set; } = null!;
+    private LDTKMetaData MetaData { get; set; } = null!;
 
     [JsonIgnore]
     public FileInfo ProjectPath { get; private set; } = null!;
@@ -39,7 +39,7 @@ public partial class LDTKProject : LDTKProject.IResourceContainer
 
     ResourceCache IResourceContainer.Cache { get; } = new();
 
-    public int GetNewUid()
+    public object GetNewUid()
     {
         return nextUid++;
     }
@@ -141,12 +141,24 @@ public partial class LDTKProject : LDTKProject.IResourceContainer
             return defs.layers;
         if ( _type == typeof( Level ) )
             return levels;
-        throw new Exception( "Unknown type" );
+        throw new Exception( $"Unknown type: {_type}" );
     }
 
-    IDictionary IResourceContainer.GetMetaDictionary( Type _metaType )
+    public IList GetMetaList( Type _metaType )
     {
-        return MetaData.GetDictionary( _metaType );
+        return MetaData.GetList( _metaType );
+    }
+
+    public List<T> GetResourceList<T>()
+        where T : IResource
+    {
+        return (List<T>) GetResourceList( typeof( T ) );
+    }
+
+    public List<T> GetMetaList<T>()
+        where T : IMeta
+    {
+        return (List<T>) GetMetaList( typeof( T ) );
     }
 
     public IEnumerable<Type> GetSupportedResources()
@@ -155,6 +167,7 @@ public partial class LDTKProject : LDTKProject.IResourceContainer
         yield return typeof( Tileset );
         yield return typeof( Entity );
         yield return typeof( Level );
+        yield return typeof( Layer );
     }
 
     public class Definitions

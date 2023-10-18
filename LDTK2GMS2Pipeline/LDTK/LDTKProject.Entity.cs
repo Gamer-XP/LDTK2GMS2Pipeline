@@ -1,22 +1,20 @@
-﻿using Spectre.Console;
-using System.Text.Json.Serialization;
+﻿using System.Collections;
+using Spectre.Console;
 using System.Text.RegularExpressions;
 using YoYoStudio.Resources;
 using static LDTK2GMS2Pipeline.GMProjectUtilities;
-using static LDTK2GMS2Pipeline.LDTK.LDTKMetaData;
-using static LDTK2GMS2Pipeline.LDTK.LDTKProject;
-using static LDTK2GMS2Pipeline.LDTK.LDTKProject.Entity;
-using static LDTK2GMS2Pipeline.LDTK.LDTKProject.Enum;
+using System.Reflection;
+using Microsoft.VisualBasic.FileIO;
 
 namespace LDTK2GMS2Pipeline.LDTK;
 
 public partial class LDTKProject
 {
-    public sealed class Entity : Resource<Entity.MetaData>
+    public sealed class Entity : Resource<Entity.MetaData>, IResourceContainer
     {
         public sealed class MetaData : Meta<Entity>
         {
-            public Dictionary<string, Field.MetaData> Properties { get; set; } = new();
+            public List<Field.MetaData> Properties { get; set; } = new();
         }
 
         public List<string> tags { get; set; } = new List<string>();
@@ -93,6 +91,32 @@ public partial class LDTKProject
                 nineSliceBorders = new int[] { sets.top, sets.right, sets.bottom, sets.left };
             }
         }
+
+        ResourceCache IResourceContainer.Cache { get; } = new();
+
+        public object GetNewUid()
+        {
+            return Project.GetNewUid();
+        }
+
+        public IEnumerable<Type> GetSupportedResources()
+        {
+            yield return typeof(Field);
+        }
+
+        public IList GetResourceList(Type _resourceType)
+        {
+            if (_resourceType == typeof(Field))
+                return fieldDefs;
+            throw new Exception($"Unknown type: {_resourceType}");
+        }
+
+        public IList GetMetaList(Type _metaType)
+        {
+            if ( _metaType == typeof( Field.MetaData ) )
+                return Meta.Properties;
+            throw new Exception( $"Unknown type: {_metaType}" );
+        }
     }
 
     public sealed class Field : Resource<Field.MetaData>
@@ -128,10 +152,8 @@ public partial class LDTKProject
             }
         }
 
-        public string identifier { get; set; }
         public object doc { get; set; }
         public string __type { get; set; }
-        public int uid { get; set; }
         public string type { get; set; }
         public bool isArray { get; set; } = false;
         public bool canBeNull { get; set; } = true;
@@ -174,7 +196,7 @@ public partial class LDTKProject
 
     public static LDTKProject.Enum GetFlipEnum( LDTKProject _ldtkProject )
     {
-        if (_ldtkProject.CrateOrExistingForced<Enum>( FlipStateEnumName, out var result ) )
+        if ( _ldtkProject.CrateOrExistingForced<Enum>( FlipStateEnumName, out var result ) )
         {
             result.values = FlipProperty.listItems.Select( _s => new Enum.Value() { id = _s } ).ToList();
         }
@@ -189,7 +211,7 @@ public partial class LDTKProject
     {
         yield return new GMObjectPropertyInfo( FlipProperty, _object );
 
-        foreach (GMObjectPropertyInfo info in GMProjectUtilities.EnumerateAllProperties(_object))
+        foreach ( GMObjectPropertyInfo info in GMProjectUtilities.EnumerateAllProperties( _object ) )
         {
             yield return info;
         }
@@ -197,33 +219,28 @@ public partial class LDTKProject
 
     private static HashSet<GMObjectPropertyInfo> loggedErrorsFor = new();
 
-    public void UpdateEntity( Entity _entity, GMObject _object, bool _skipAddEntityLogs )
+    public void UpdateEntity( Entity _entity, GMObject _object )
     {
         var flipEnum = GetFlipEnum( this );
 
         List<GMObjectPropertyInfo> definedProperties = EnumerateAllProperties( _object ).ToList();
 
-        Entity.MetaData meta = _entity.Meta;
-
-        RemoveMissingProperties( meta, definedProperties.Select( t => t.Property ) );
+        RemoveMissingProperties( definedProperties.Select( t => t.Property ) );
 
         foreach ( var propertyInfo in definedProperties )
         {
-            UpdateField( propertyInfo, meta.Properties.GetValueOrDefault( propertyInfo.Property.varName ) );
+            UpdateField( propertyInfo );
         }
 
-        void RemoveMissingProperties( Entity.MetaData _meta, IEnumerable<GMObjectProperty> _properties )
+        void RemoveMissingProperties( IEnumerable<GMObjectProperty> _properties )
         {
-            var missingProperties = _meta.Properties.ExceptBy( _properties.Select( t => t.varName ), t => t.Key );
-            foreach ( var property in missingProperties )
+            _entity.RemoveUnusedMeta<Field.MetaData>( _properties.Select( t => t.varName), _s =>
             {
-                AnsiConsole.MarkupLineInterpolated( $"[blue]Property [underline]{property.Key}[/] in object [teal]{_object.name}[/] is missing. Removing...[/]" );
-                _entity.fieldDefs.RemoveAll( t => t.uid == property.Value.uid );
-                _meta.Properties.Remove( property.Key );
-            }
+                AnsiConsole.MarkupLineInterpolated( $"[blue]Property [underline]{_s}[/] in object [teal]{_object.name}[/] is missing. Removing...[/]" );
+            } );
         }
 
-        void UpdateField( GMObjectPropertyInfo _info, Field.MetaData? _propertyMeta )
+        void UpdateField( GMObjectPropertyInfo _info )
         {
             if ( _info.Property.multiselect )
             {
@@ -258,56 +275,37 @@ public partial class LDTKProject
                 loggedErrorsFor.Add( _info );
             }
 
-            Field? field = null;
-            if ( _propertyMeta != null )
-                field = _entity.fieldDefs.Find( t => t.uid == _propertyMeta.uid );
+            bool justCreated = _entity.CreateOrExisting<Field>(_info.Property.varName, out var field);
+            if ( field == null)
+                return;
 
-            if ( field == null )
+            if ( justCreated )
             {
-                field = new Field()
-                {
-                    identifier = _info.Property.varName,
-                    type = fieldType.type,
-                    __type = fieldType.__type,
-                    uid = GetNewUid(),
-                    canBeNull = false,
-                    editorShowInWorld = true,
-                    editorDisplayMode = "NameAndValue",
-                    editorDisplayPos = "Beneath",
-                    defaultOverride = defaultValueJson,
-                    isArray = _info.Property.multiselect
-                };
+                field.type = fieldType.type;
+                field.__type = fieldType.__type;
+                field.canBeNull = false;
+                field.editorShowInWorld = true;
+                field.editorDisplayMode = "NameAndValue";
+                field.editorDisplayPos = "Beneath";
+                field.defaultOverride = defaultValueJson;
+                field.isArray = _info.Property.multiselect;
 
                 if ( _info.Property.rangeEnabled )
                 {
                     field.min = _info.Property.rangeMin;
                     field.max = _info.Property.rangeMax;
                 }
-
-                _entity.fieldDefs.Add( field );
-
-                if ( !_skipAddEntityLogs )
-                    AnsiConsole.MarkupLineInterpolated( $"Property [green]{field.identifier} [[{field.__type}]][/] was added to the object [teal]{_object.name}[/]" );
             }
-            else if ( !defaultValueJson.Equals( field.defaultOverride ) )
+            else 
+            if ( !defaultValueJson.Equals( field.defaultOverride ) )
             {
-                if ( _propertyMeta == null || !_propertyMeta.gotError )
+                if ( !field.Meta.gotError )
                     AnsiConsole.MarkupLineInterpolated( $"Default Value changed for field [green]{field.identifier}[/] in [teal]{_entity.identifier}[/] from '{field.defaultOverride?.ToString()}' to '{defaultValueJson?.ToString()}'" );
                 field.defaultOverride = defaultValueJson;
             }
 
-            if ( _propertyMeta == null )
-            {
-                _propertyMeta = new Field.MetaData
-                {
-                    uid = field.uid,
-                    Resource = field
-                };
-                meta.Properties.Add( _info.Property.varName, _propertyMeta );
-            }
-
-            _propertyMeta.type = type;
-            _propertyMeta.gotError = !convertSuccess;
+            field.Meta.type = type;
+            field.Meta.gotError = !convertSuccess;
         }
 
         void InitializeListProperty( GMObjectPropertyInfo _info, out LDTKProject.Enum _enum, out string? _valueType )
@@ -321,7 +319,7 @@ public partial class LDTKProject
 
             string enumName = ProduceEnumName( _info.DefinedIn, _info.Property );
 
-            this.CrateOrExistingForced(enumName, out _enum);
+            this.CrateOrExistingForced( enumName, out _enum );
 
             _valueType = _enum.GetType( _info.Property );
         }
@@ -348,7 +346,7 @@ public partial class LDTKProject
         }
     }
 
-    public static string ToValueEnumValue( string _input )
+    public static string ToPascalCase( string _input )
     {
         Regex invalidCharsRgx = new Regex( "[^_a-zA-Z0-9]" );
         Regex whiteSpace = new Regex( @"(?<=\s)" );

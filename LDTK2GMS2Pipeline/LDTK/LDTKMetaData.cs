@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections;
 using System.Text.Json.Serialization;
-using YoYoStudio.Resources;
 
 namespace LDTK2GMS2Pipeline.LDTK;
 
@@ -11,25 +8,32 @@ public sealed class LDTKMetaData
     [JsonIgnore]
     public LDTKProject Project { get; internal set; }
 
-    public Dictionary<string, LDTKProject.Entity.MetaData> objects { get; set; } = new();
-    public Dictionary<string, LDTKProject.Tileset.MetaData> tilesets { get; set; } = new();
-    public Dictionary<string, LDTKProject.Level.MetaData> levels { get; set; } = new();
-    public Dictionary<string, LDTKProject.Enum.MetaData> enums { get; set; } = new();
-    
-    private Dictionary<Type, IDictionary>? dictCache = null;
+    [JsonInclude]
+    public List<LDTKProject.Entity.MetaData> objects { get; private set; } = new();
+    [JsonInclude]
+    public List<LDTKProject.Tileset.MetaData> tilesets { get; private set; } = new();
+    [JsonInclude]
+    public List<LDTKProject.Level.MetaData> levels { get; private set; } = new();
+    [JsonInclude]
+    public List<LDTKProject.Enum.MetaData> enums { get; private set; } = new();
+    [JsonInclude]
+    public List<LDTKProject.Layer.MetaData> layers { get; private set; } = new();
 
-    private Dictionary<Type, IDictionary> GetCache()
+    private Dictionary<Type, IList>? dictCache = null;
+
+    private Dictionary<Type, IList> GetCache()
     {
-        return dictCache ??= new Dictionary<Type, IDictionary>
+        return dictCache ??= new Dictionary<Type, IList>
         {
             { typeof(LDTKProject.Entity.MetaData), objects },
             { typeof(LDTKProject.Tileset.MetaData), tilesets },
             { typeof(LDTKProject.Level.MetaData), levels },
-            { typeof(LDTKProject.Enum.MetaData), enums }
+            { typeof(LDTKProject.Enum.MetaData), enums },
+            { typeof(LDTKProject.Layer.MetaData), layers }
         };
     }
 
-    public IDictionary GetDictionary(Type _metaType)
+    public IList GetList( Type _metaType )
     {
         return GetCache()[_metaType];
     }

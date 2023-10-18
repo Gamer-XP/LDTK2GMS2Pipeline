@@ -1,5 +1,4 @@
 ﻿using YoYoStudio.Resources;
-using static LDTK2GMS2Pipeline.LDTK.LDTKMetaData;
 
 namespace LDTK2GMS2Pipeline.LDTK;
 
@@ -34,7 +33,7 @@ public partial class LDTKProject
 
         public string? GetType( GMObjectProperty _property )
         {
-            if (!needValidation)
+            if ( !needValidation )
                 return type;
 
             type = null;

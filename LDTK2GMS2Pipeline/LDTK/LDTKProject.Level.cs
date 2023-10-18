@@ -1,12 +1,17 @@
-﻿using System.Collections;
+﻿using ProjectManager;
+using System.Collections;
+using static LDTK2GMS2Pipeline.LDTK.LDTKProject;
 
 namespace LDTK2GMS2Pipeline.LDTK;
 
 public partial class LDTKProject
 {
-    public class Level : Resource<Level.MetaData>
+    public class Level : Resource<Level.MetaData>, IResourceContainer
     {
-        public class MetaData : Meta<Level> { }
+        public class MetaData : Meta<Level>
+        {
+            public List<Layer.MetaData> Layers { get; set; } = new();
+        }
 
         public string iid { get; set; }
         public int worldX { get; set; }
@@ -28,6 +33,28 @@ public partial class LDTKProject
         public List<Layer> layerInstances { get; set; } = new();
         public List<Neighbour> __neighbours { get; set; } = new();
 
+        ResourceCache IResourceContainer.Cache { get; } = new();
+
+        public object GetNewUid()
+        {
+            return Guid.NewGuid().ToString();
+        }
+
+        public IEnumerable<Type> GetSupportedResources()
+        {
+            yield return typeof(Layer);
+        }
+
+        public IList GetResourceList( Type _type )
+        {
+            return _type == typeof(Layer) ? layerInstances : throw new Exception($"Unsupported type: {_type}");
+        }
+
+        public IList GetMetaList( Type _type )
+        {
+            return _type == typeof( Layer.MetaData ) ? Meta.Layers : throw new Exception( $"Unsupported type: {_type}" );
+        }
+
         public Level GetDatalessCopy( string _projectName )
         {
             Level result = (Level) this.MemberwiseClone();
@@ -39,9 +66,13 @@ public partial class LDTKProject
             return result;
         }
 
-        public sealed class Layer
+        public sealed class Layer : GuidResource<Layer.MetaData>, IResourceContainer
         {
-            public string __identifier { get; set; }
+            public class MetaData : GuidMeta<Layer>
+            {
+                public List<EntityInstance.MetaData> Entities { get; set; }= new();
+            }
+
             public string __type { get; set; }
             public int __cWid { get; set; }
             public int __cHei { get; set; }
@@ -51,7 +82,6 @@ public partial class LDTKProject
             public int __pxTotalOffsetY { get; set; }
             public int? __tilesetDefUid { get; set; }
             public string? __tilesetRelPath { get; set; }
-            public string iid { get; set; }
             public int levelId { get; set; }
             public int layerDefUid { get; set; }
             public int pxOffsetX { get; set; }
@@ -65,20 +95,40 @@ public partial class LDTKProject
             public List<TileInstance> gridTiles { get; set; } = new();
             public List<EntityInstance> entityInstances { get; set; } = new();
 
-            public sealed class EntityInstance : Resource<EntityInstance.MetaData>
+            ResourceCache IResourceContainer.Cache { get; } = new();
+
+            public object GetNewUid()
             {
-                public class MetaData : LDTKProject.Meta<EntityInstance>
+                return Guid.NewGuid().ToString();
+            }
+
+            public IEnumerable<Type> GetSupportedResources()
+            {
+                yield return typeof( EntityInstance );
+            }
+
+            public IList GetResourceList( Type _type )
+            {
+                return _type == typeof( EntityInstance ) ? entityInstances : throw new Exception( $"Unsupported type: {_type}" );
+            }
+
+            public IList GetMetaList( Type _type )
+            {
+                return _type == typeof( EntityInstance.MetaData ) ? Meta.Entities : throw new Exception( $"Unsupported type: {_type}" );
+            }
+
+            public sealed class EntityInstance : GuidResource<EntityInstance.MetaData>
+            {
+                public class MetaData : GuidMeta<EntityInstance>
                 {
-                    
+                    //public List<FieldInstance.MetaData> Fields { get; set; } = new();
                 }
 
-                public string __identifier { get; set; }
                 public List<int> __grid { get; set; }
                 public List<double> __pivot { get; set; }
                 public List<string> __tags { get; set; }
                 public TileRect? __tile { get; set; }
                 public string __smartColor { get; set; }
-                public string iid { get; set; }
                 public int __worldX { get; set; }
                 public int __worldY { get; set; }
                 public int width { get; set; }
@@ -86,44 +136,51 @@ public partial class LDTKProject
                 public int defUid { get; set; }
                 public List<int> px { get; set; } = new();
                 public List<FieldInstance> fieldInstances { get; set; } = new();
+            }
 
-                public sealed class FieldInstance
+            public sealed class FieldInstance
+            {
+                /*
+                public class MetaData
                 {
-                    public string __identifier { get; set; }
-                    public string __type { get; set; }
-                    public object __value { get; set; }
-                    public object? __tile { get; set; }
-                    public int defUid { get; set; }
-                    public List<DefaultOverride> realEditorValues { get; set; } = new(0);
+                    public string iid { get; set; }
+                }
+                */
 
-                    public FieldInstance(){}
+                public string __identifier { get; set; }
+                public string __type { get; set; }
+                public object __value { get; set; }
+                public object? __tile { get; set; }
+                public int defUid { get; set; }
+                public List<DefaultOverride> realEditorValues { get; set; } = new( 0 );
 
-                    public FieldInstance(Field _field)
+                public FieldInstance() { }
+
+                public FieldInstance( Field _field )
+                {
+                    __identifier = _field.identifier;
+                    defUid = _field.uid;
+                    __type = _field.__type;
+                }
+
+                public FieldInstance( Field _field, DefaultOverride.IdTypes _type, object _value ) : this( _field )
+                {
+                    SetValue( _type, _value );
+                }
+
+                public void SetValue( DefaultOverride.IdTypes _type, object _value )
+                {
+                    __value = _value;
+                    realEditorValues = new()
                     {
-                        __identifier = _field.identifier;
-                        defUid = _field.uid;
-                        __type = _field.__type;
-                    }
+                        new DefaultOverride(_type, _value)
+                    };
+                }
 
-                    public FieldInstance(Field _field, DefaultOverride.IdTypes _type, object _value) : this(_field)
-                    {
-                        SetValue(_type, _value);
-                    }
-
-                    public void SetValue( DefaultOverride.IdTypes _type, object _value  )
-                    {
-                        __value = _value;
-                        realEditorValues = new()
-                        {
-                            new DefaultOverride(_type, _value)
-                        };
-                    }
-
-                    public void SetValue( DefaultOverride _value )
-                    {
-                        __value = _value.values?[0];
-                        realEditorValues = new List<DefaultOverride>() { _value };
-                    }
+                public void SetValue( DefaultOverride _value )
+                {
+                    __value = _value.values?[0];
+                    realEditorValues = new List<DefaultOverride>() { _value };
                 }
             }
 

@@ -19,7 +19,7 @@ internal class Program
     {
         using var timer = TimerBenchmark.StartDebug( "TOTAL" );
 
-        var ldtkProjectTask = LoadLDTKProject( false );
+        var ldtkProjectTask = LoadLDTKProject( true );
         await ldtkProjectTask;
         var gmProjectTask = GMProjectUtilities.LoadGMProject();
 
@@ -100,8 +100,8 @@ internal class Program
             if ( gmTileset.tilexoff != 0 || gmTileset.tileyoff != 0 )
                 AnsiConsole.MarkupLineInterpolated( $"Warning in [teal]{gmTileset.name}[/]! [yellow]Offsets work as padding in LDTK. You may lose most right and bottom tiles![/]" );
 
-            tileset.pxWid = gmTileset.tileWidth * gmTileset.out_columns;
-            tileset.pxHei = gmTileset.tileHeight * gmTileset.tile_count / gmTileset.out_columns;
+            tileset.pxWid = gmTileset.spriteId.width;
+            tileset.pxHei = gmTileset.spriteId.height;
             tileset.tileGridSize = gmTileset.tileWidth;
             tileset.__cWid = gmTileset.out_columns;
             tileset.__cHei = gmTileset.tile_count / gmTileset.out_columns;
@@ -109,7 +109,7 @@ internal class Program
             tileset.padding = gmTileset.tilexoff;
 
             string tilesetFullPath = GMProjectUtilities.GetFullPath( gmTileset.spriteId.GetCompositePaths()[0] );
-            tileset.relPath = Path.GetRelativePath( _project.ProjectDirectory, tilesetFullPath );
+            tileset.relPath = Path.GetRelativePath( _project.ProjectDirectory, tilesetFullPath ).Replace("\\", "/");
         }
     }
 
@@ -174,20 +174,14 @@ internal class Program
                 Level.Layer? layer = level.layerInstances.Find( t => t.layerDefUid == layerDef.uid );
                 if ( layer == null )
                 {
-                    layer = new()
-                    {
-                        __type = layerDef.__type,
-                        __identifier = layerDef.identifier,
-                        __gridSize = layerDef.gridSize,
-                        iid = Guid.NewGuid().ToString(),
-                        seed = Random.Shared.Next( 9999999 ),
-                        __cWid = (room.roomSettings.Width + layerDef.gridSize - 1) / layerDef.gridSize,
-                        __cHei = (room.roomSettings.Height + layerDef.gridSize - 1) / layerDef.gridSize,
-                        levelId = level.uid,
-                        layerDefUid = layerDef.uid
-                    };
-
-                    level.layerInstances.Add( layer );
+                    layer = level.Create<Level.Layer>(layerDef.identifier);
+                    layer.__type = layerDef.__type;
+                    layer.__gridSize = layerDef.gridSize;
+                    layer.seed = Random.Shared.Next(9999999);
+                    layer.__cWid = (room.roomSettings.Width + layerDef.gridSize - 1) / layerDef.gridSize;
+                    layer.__cHei = (room.roomSettings.Height + layerDef.gridSize - 1) / layerDef.gridSize;
+                    layer.levelId = level.uid;
+                    layer.layerDefUid = layerDef.uid;
                 }
 
                 layer.visible = gmLayer.visible;
@@ -197,22 +191,22 @@ internal class Program
                     case GMRInstanceLayer instLayer:
 
                         layer.entityInstances.Clear();
+
                         foreach ( GMRInstance gmInstance in instLayer.instances )
                         {
-                            if ( gmInstance.ignore)
-                                continue;
-
-                            if (!entityDict.TryGetValue(gmInstance.objectId, out var entityData))
+                            if ( gmInstance.ignore || !entityDict.TryGetValue(gmInstance.objectId, out var entityType))
                             {
-                                AnsiConsole.MarkupLineInterpolated($"[yellow]Unable to find unity matching object [teal]{gmInstance.objectId.name}[/] for level [olive]{room.name}[/][/]");
+                                if ( !gmInstance.ignore )
+                                    AnsiConsole.MarkupLineInterpolated($"[yellow]Unable to find unity matching object [teal]{gmInstance.objectId.name}[/] for level [olive]{room.name}[/][/]");
+
+                                layer.Remove<Level.Layer.EntityInstance>(gmInstance.name);
                                 continue;
                             }
 
-                            var entityType = entityData;
-
                             bool GetField( string _name, out Field.MetaData _meta )
                             {
-                                return entityData.Meta.Properties.TryGetValue(_name, out _meta!);
+                                _meta = entityType.GetMeta<Field.MetaData>(_name);
+                                return _meta != null;
                             }
 
                             int width = (int)(entityType.width * MathF.Abs(gmInstance.scaleX));
@@ -220,20 +214,21 @@ internal class Program
                             int posX = (int) gmInstance.x;
                             int posY = (int) gmInstance.y;
 
-                            Level.Layer.EntityInstance instance = new();
-                            instance.__pivot = new List<double>() { entityType.pivotX, entityType.pivotY };
+                            bool newInstance = layer.CrateOrExistingForced( gmInstance.name, out Level.Layer.EntityInstance instance );
+                            if (newInstance)
+                            {
+                                instance.__pivot = new List<double>() { entityType.pivotX, entityType.pivotY };
+                                instance.__identifier = entityType.identifier;
+                                instance.defUid = entityType.uid;
+                                instance.__tile = entityType.tileRect;
+                            }
 
                             if ( gmInstance.flipX )
                                 posX += (int)((entityType.pivotX - 0.5f) * 2f * width);
                             if ( gmInstance.flipY )
                                 posY += (int) ((entityType.pivotY - 0.5f) * 2f * height);
 
-                            instance.__identifier = entityType.identifier;
-                            instance.defUid = entityType.uid;
-                            instance.iid = Guid.NewGuid().ToString();
-                            
                             instance.__tags = entityType.tags;
-                            instance.__tile = entityType.tileRect;
                             instance.px = new List<int>() { posX, posY };
                             instance.__grid = new List<int>() { posX / layerDef.gridSize, posY / layerDef.gridSize };
                             instance.__worldX = level.worldX + posX;
@@ -246,7 +241,7 @@ internal class Program
                             if (flipIndex > 0)
                             {
                                 if ( GetField( LDTKProject.FlipStateEnumName,  out var fieldMeta ))
-                                    instance.fieldInstances.Add(new Level.Layer.EntityInstance.FieldInstance( fieldMeta.Resource, DefaultOverride.IdTypes.V_String, flipEnum.values[flipIndex].id ));
+                                    instance.fieldInstances.Add(new Level.Layer.FieldInstance( fieldMeta.Resource, DefaultOverride.IdTypes.V_String, flipEnum.values[flipIndex].id ));
                             }
 
                             foreach (GMOverriddenProperty propOverride in gmInstance.properties)
@@ -260,9 +255,14 @@ internal class Program
                                     continue;
                                 }
 
-                                var field = new Level.Layer.EntityInstance.FieldInstance(meta.Resource);
+                                var field = instance.fieldInstances.Find(t => t.defUid == meta.Resource.uid);
+                                if (field == null)
+                                {
+                                    field = new Level.Layer.FieldInstance(meta.Resource);
+                                    instance.fieldInstances.Add( field );
+                                }
+
                                 field.SetValue( result );
-                                instance.fieldInstances.Add( field );
                             }
 
                             layer.entityInstances.Add( instance );
@@ -388,7 +388,7 @@ internal class Program
             {
                 if (isNew)
                     entity.Init( levelObject, _atlasTileset, _atlas );
-                _ldtkProject.UpdateEntity(entity, levelObject, isNew);
+                _ldtkProject.UpdateEntity(entity, levelObject);
             }
         }
 
