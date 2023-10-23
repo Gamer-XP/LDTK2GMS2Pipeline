@@ -1,7 +1,18 @@
-﻿namespace LDTK2GMS2Pipeline.LDTK;
+﻿using Spectre.Console;
+using YoYoStudio.Resources;
+
+namespace LDTK2GMS2Pipeline.LDTK;
 
 public partial class LDTKProject
 {
+    public static class LayerTypes
+    {
+        public const string IntGrid = nameof(IntGrid);
+        public const string Entities = nameof( Entities );
+        public const string Tiles = nameof( Tiles );
+        public const string AutoLayer = nameof( AutoLayer );
+    }
+
     public class Layer : Resource<Layer.MetaData>
     {
         public class MetaData : Meta<Layer> { }
@@ -86,6 +97,21 @@ public partial class LDTKProject
             public int perlinSeed { get; set; }
             public double perlinScale { get; set; }
             public int perlinOctaves { get; set; }
+        }
+
+        public static bool CanBeConverted( GMRLayer _layer, string _type )
+        {
+            switch ( _layer )
+            {
+                case GMRInstanceLayer:
+                    return _type == LayerTypes.Entities;
+
+                case GMRTileLayer:
+                    return _type == LayerTypes.Tiles;
+
+                default:
+                    return false;
+            }
         }
     }
 }

@@ -39,9 +39,24 @@ public partial class LDTKProject : LDTKProject.IResourceContainer
 
     ResourceCache IResourceContainer.Cache { get; } = new();
 
-    public object GetNewUid()
+    public object GetNewUid(IResource _resource )
     {
         return nextUid++;
+    }
+
+    public static async Task<LDTKProject> Load( string? _filterByEnding = null )
+    {
+        var files = IProjectUtilities.FindProjectFilesHere( ".ldtk" );
+        FileInfo? ldtkProjectFile;
+        if ( _filterByEnding != null )
+            files = files.Where( t => Path.GetFileNameWithoutExtension( t.Name ).EndsWith(_filterByEnding) );
+
+        ldtkProjectFile = files.FirstOrDefault();
+
+        if ( ldtkProjectFile is null )
+            throw new Exception( "LDTK project not found" );
+
+        return await LDTKProject.Load( ldtkProjectFile );
     }
 
     public static async Task<LDTKProject> Load( FileInfo _file )
@@ -93,11 +108,9 @@ public partial class LDTKProject : LDTKProject.IResourceContainer
         this.UpdateMetaCache();
     }
 
-    public async Task Save( FileInfo? _savePath = null )
+    public async Task Save( string _nameSuffix = "" )
     {
-        _savePath ??= ProjectPath;
-
-        string projectFileName = Path.GetFileNameWithoutExtension( _savePath.FullName ) + "_debug";
+        string projectFileName = Path.GetFileNameWithoutExtension( ProjectPath.FullName ) + _nameSuffix;
 
         identifierStyle = "Free";
 
@@ -125,7 +138,17 @@ public partial class LDTKProject : LDTKProject.IResourceContainer
         var savePath = $"{ProjectPath.DirectoryName}\\{projectFileName}.ldtk";
         await File.WriteAllTextAsync( savePath, mergedJson );
 
-        await using var metaFile = File.Open( Path.ChangeExtension( savePath, ".meta" ), FileMode.Create );
+        await SaveMeta(savePath);
+    }
+
+    public Task SaveMeta()
+    {
+        return SaveMeta(MetaPath.FullName);
+    }
+
+    public async Task SaveMeta( string _savePath )
+    {
+        await using var metaFile = File.Open( Path.ChangeExtension( _savePath, ".meta" ), FileMode.Create );
         await JsonSerializer.SerializeAsync( metaFile, MetaData, new JsonSerializerOptions() { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault } );
     }
 

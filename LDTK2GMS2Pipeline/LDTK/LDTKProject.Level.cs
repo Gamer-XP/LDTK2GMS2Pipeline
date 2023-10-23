@@ -1,6 +1,11 @@
 ﻿using ProjectManager;
 using System.Collections;
+using System.Collections.Generic;
+using System.Reflection.Metadata;
+using System.Text.Json.Serialization;
 using static LDTK2GMS2Pipeline.LDTK.LDTKProject;
+using static LDTK2GMS2Pipeline.LDTK.LDTKProject.Layer;
+using static LDTK2GMS2Pipeline.LDTK.LDTKProject.Level;
 
 namespace LDTK2GMS2Pipeline.LDTK;
 
@@ -35,7 +40,7 @@ public partial class LDTKProject
 
         ResourceCache IResourceContainer.Cache { get; } = new();
 
-        public object GetNewUid()
+        public object GetNewUid( IResource _resource )
         {
             return Guid.NewGuid().ToString();
         }
@@ -52,7 +57,7 @@ public partial class LDTKProject
 
         public IList GetMetaList( Type _type )
         {
-            return _type == typeof( Layer.MetaData ) ? Meta.Layers : throw new Exception( $"Unsupported type: {_type}" );
+            return _type == typeof( Layer.MetaData ) ? Meta?.Layers ?? throw new Exception( "Meta is null. Initialize it first." ) : throw new Exception( $"Unsupported type: {_type}" );
         }
 
         public Level GetDatalessCopy( string _projectName )
@@ -73,7 +78,7 @@ public partial class LDTKProject
                 public List<EntityInstance.MetaData> Entities { get; set; }= new();
             }
 
-            public string __type { get; set; }
+            public string __type { get; set; } = LayerTypes.Tiles;
             public int __cWid { get; set; }
             public int __cHei { get; set; }
             public int __gridSize { get; set; }
@@ -97,7 +102,7 @@ public partial class LDTKProject
 
             ResourceCache IResourceContainer.Cache { get; } = new();
 
-            public object GetNewUid()
+            public object GetNewUid( IResource _resource )
             {
                 return Guid.NewGuid().ToString();
             }
@@ -114,74 +119,7 @@ public partial class LDTKProject
 
             public IList GetMetaList( Type _type )
             {
-                return _type == typeof( EntityInstance.MetaData ) ? Meta.Entities : throw new Exception( $"Unsupported type: {_type}" );
-            }
-
-            public sealed class EntityInstance : GuidResource<EntityInstance.MetaData>
-            {
-                public class MetaData : GuidMeta<EntityInstance>
-                {
-                    //public List<FieldInstance.MetaData> Fields { get; set; } = new();
-                }
-
-                public List<int> __grid { get; set; }
-                public List<double> __pivot { get; set; }
-                public List<string> __tags { get; set; }
-                public TileRect? __tile { get; set; }
-                public string __smartColor { get; set; }
-                public int __worldX { get; set; }
-                public int __worldY { get; set; }
-                public int width { get; set; }
-                public int height { get; set; }
-                public int defUid { get; set; }
-                public List<int> px { get; set; } = new();
-                public List<FieldInstance> fieldInstances { get; set; } = new();
-            }
-
-            public sealed class FieldInstance
-            {
-                /*
-                public class MetaData
-                {
-                    public string iid { get; set; }
-                }
-                */
-
-                public string __identifier { get; set; }
-                public string __type { get; set; }
-                public object __value { get; set; }
-                public object? __tile { get; set; }
-                public int defUid { get; set; }
-                public List<DefaultOverride> realEditorValues { get; set; } = new( 0 );
-
-                public FieldInstance() { }
-
-                public FieldInstance( Field _field )
-                {
-                    __identifier = _field.identifier;
-                    defUid = _field.uid;
-                    __type = _field.__type;
-                }
-
-                public FieldInstance( Field _field, DefaultOverride.IdTypes _type, object _value ) : this( _field )
-                {
-                    SetValue( _type, _value );
-                }
-
-                public void SetValue( DefaultOverride.IdTypes _type, object _value )
-                {
-                    __value = _value;
-                    realEditorValues = new()
-                    {
-                        new DefaultOverride(_type, _value)
-                    };
-                }
-
-                public void SetValue( DefaultOverride _value )
-                {
-                    __value = _value.values?[0];
-                    realEditorValues = new List<DefaultOverride>() { _value };
-                }
+                return _type == typeof( EntityInstance.MetaData ) ? Meta?.Entities ?? throw new Exception( "Meta is null. Initialize it first." ) : throw new Exception( $"Unsupported type: {_type}" );
             }
 
             public sealed class AutoLayerTile
@@ -202,6 +140,111 @@ public partial class LDTKProject
                 public int t { get; set; }
                 public IList<int> d { get; set; } = new List<int>();
                 public float a { get; set; } = 1f;
+            }
+        }
+
+        public sealed class EntityInstance : GuidResource<EntityInstance.MetaData>, IResourceContainer
+        {
+            public class MetaData : GuidMeta<EntityInstance>
+            {
+                public List<FieldInstance.MetaData> Fields { get; set; } = new();
+            }
+
+            public List<int> __grid { get; set; }
+            public List<double> __pivot { get; set; }
+            public List<string> __tags { get; set; }
+            public TileRect? __tile { get; set; }
+            public string __smartColor { get; set; }
+            public int __worldX { get; set; }
+            public int __worldY { get; set; }
+            public int width { get; set; }
+            public int height { get; set; }
+            public int defUid { get; set; }
+            public List<int> px { get; set; } = new();
+            public List<FieldInstance> fieldInstances { get; set; } = new();
+
+            ResourceCache IResourceContainer.Cache { get; } = new();
+
+            public object GetNewUid( IResource _resource )
+            {
+                return _resource is FieldInstance inst? inst.defUid : throw new Exception( $"Unsupported resource: {_resource}" );
+            }
+
+            public override MetaData CreateMeta(string _name)
+            {
+                return base.CreateMeta(_name);
+            }
+
+            public IEnumerable<Type> GetSupportedResources()
+            {
+                yield return typeof( FieldInstance );
+            }
+
+            public IList GetResourceList( Type _type )
+            {
+                return _type == typeof( FieldInstance ) ? fieldInstances : throw new Exception( $"Unsupported type: {_type}" );
+            }
+
+            public IList GetMetaList( Type _type )
+            {
+                return _type == typeof( FieldInstance.MetaData ) ? Meta?.Fields ?? throw new Exception( "Meta is null. Initialize it first." ) : throw new Exception( $"Unsupported type: {_type}" );
+            }
+        }
+
+        public sealed class FieldInstance : IResource<FieldInstance.MetaData, int>
+        {
+            public class MetaData : IMeta<FieldInstance, int>
+            {
+                [JsonIgnore]
+                public FieldInstance? Resource { get; set; }
+
+                public int uid { get; set; }
+                public string identifier { get; set; }
+
+                public bool GotError { get; set; } = false;
+            }
+
+            [JsonIgnore]
+            public LDTKProject Project { get; set; }
+
+            [JsonIgnore]
+            public MetaData? Meta { get; set; }
+
+            [JsonIgnore]
+            public bool IsOverridden => realEditorValues.Count > 0 && realEditorValues[0] != null;
+
+            public string __identifier { get; set; }
+            public string __type { get; set; }
+            public object __value { get; set; }
+            public object? __tile { get; set; }
+            public int defUid { get; set; }
+            public List<DefaultOverride?> realEditorValues { get; set; } = new( 0 );
+
+            string IResource.identifier
+            {
+                get => __identifier;
+                set => __identifier = value;
+            }
+
+            int IResource<FieldInstance.MetaData, int>.uid
+            {
+                get => defUid;
+                set => defUid = value;
+            }
+
+            public void SetValue( DefaultOverride.IdTypes _type, object _value )
+            {
+                __value = _value;
+                realEditorValues = new()
+                {
+                    new DefaultOverride(_type, _value)
+                };
+            }
+
+            public void SetValue( DefaultOverride _value )
+            {
+                __value = _value.values?[0];
+                realEditorValues = new List<DefaultOverride>() { _value };
             }
         }
 

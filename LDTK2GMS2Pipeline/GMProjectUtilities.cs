@@ -12,6 +12,7 @@ using System.Reflection;
 using static ProjectManager.GameMaker.GMS2Project;
 using LDTK2GMS2Pipeline.LDTK;
 using static LDTK2GMS2Pipeline.LDTK.LDTKProject;
+using Spectre.Console;
 
 namespace LDTK2GMS2Pipeline;
 
@@ -42,6 +43,28 @@ public static class GMProjectUtilities
             Console.WriteLine( $"Failure: {_r.name}" );
             throw new Exception("Failed to load GameMaker project");
         } );
+
+        return loadingWait.Task;
+    }
+
+    public static Task SaveGMProject(GMProject _project)
+    {
+        var loadingWait = new TaskCompletionSource();
+
+        _project.Save(_sender =>
+            {
+                Console.WriteLine( $"Saved: {_sender.name}" );
+                if (_sender == _project)
+                    loadingWait.SetResult();
+            }, (_sender, _progress ) =>
+            {
+
+            },
+            _sender =>
+            {
+                loadingWait.SetException( new Exception( $"Failed to save: {_sender.name}"));
+            } );
+        
 
         return loadingWait.Task;
     }

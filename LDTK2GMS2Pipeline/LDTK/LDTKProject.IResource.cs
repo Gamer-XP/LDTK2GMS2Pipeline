@@ -70,7 +70,7 @@ public partial class LDTKProject
 
         public LDTKProject Project { get; set; }
 
-        public IMeta Meta { get; set; }
+        public IMeta? Meta { get; set; }
         public IMeta CreateMeta( string _name );
         public Type MetaType { get; }
 
@@ -89,13 +89,13 @@ public partial class LDTKProject
     public interface IResource<TMeta, TId> : IResource
         where TMeta : IMeta, new()
     {
-        public new TMeta Meta { get; set; }
+        public new TMeta? Meta { get; set; }
         public new TId uid { get; set; }
 
-        IMeta IResource.Meta
+        IMeta? IResource.Meta
         {
             get => Meta;
-            set => Meta = (TMeta) value;
+            set => Meta = (TMeta?) value;
         }
 
         object IResource.uid
@@ -122,20 +122,25 @@ public partial class LDTKProject
         where T : IMeta, new()
     {
         [JsonIgnore]
-        public T Meta { get; set; }
+        public T? Meta { get; set; }
 
         [JsonIgnore]
         public LDTKProject Project { get; set; }
 
         public string identifier { get; set; }
         public int uid { get; set; }
+
+        public virtual T CreateMeta( string _name )
+        {
+            return (T) ((IResource) this).CreateMeta( _name );
+        }
     }
 
     public class GuidResource<T> : IResource<T, string>
         where T : IMeta, new()
     {
         [JsonIgnore]
-        public T Meta { get; set; }
+        public T? Meta { get; set; }
 
         [JsonIgnore]
         public LDTKProject Project { get; set; }
@@ -153,6 +158,11 @@ public partial class LDTKProject
         {
             get => iid;
             set => iid = value;
+        }
+
+        public virtual T CreateMeta( string _name )
+        {
+            return (T) ((IResource) this).CreateMeta( _name );
         }
     }
 

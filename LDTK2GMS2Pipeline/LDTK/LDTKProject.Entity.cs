@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using YoYoStudio.Resources;
 using static LDTK2GMS2Pipeline.GMProjectUtilities;
 using System.Reflection;
+using LDTK2GMS2Pipeline.Sync;
 using Microsoft.VisualBasic.FileIO;
 
 namespace LDTK2GMS2Pipeline.LDTK;
@@ -94,9 +95,9 @@ public partial class LDTKProject
 
         ResourceCache IResourceContainer.Cache { get; } = new();
 
-        public object GetNewUid()
+        public object GetNewUid(IResource _resource )
         {
-            return Project.GetNewUid();
+            return Project.GetNewUid( _resource );
         }
 
         public IEnumerable<Type> GetSupportedResources()
@@ -113,8 +114,11 @@ public partial class LDTKProject
 
         public IList GetMetaList(Type _metaType)
         {
-            if ( _metaType == typeof( Field.MetaData ) )
-                return Meta.Properties;
+            if (_metaType == typeof(Field.MetaData))
+            {
+                return Meta?.Properties ?? throw new Exception("Meta is null. Initialize it first.");
+            }
+
             throw new Exception( $"Unknown type: {_metaType}" );
         }
     }
@@ -128,12 +132,17 @@ public partial class LDTKProject
 
             public const string StringPropertyType = "$string";
 
-            public string? ProcessValue( string? _input )
+            public string? GM2LDTK( string? _input )
             {
-                return ProcessValue( _input, type );
+                return GM2LDTK( _input, type );
             }
 
-            public static string? ProcessValue( string? _input, string? _type )
+            public string? LDTK2GM( object? _input )
+            {
+                return LDTK2GM( _input, type );
+            }
+
+            public static string? GM2LDTK( string? _input, string? _type )
             {
                 if ( _input == null )
                     return null;
@@ -141,13 +150,27 @@ public partial class LDTKProject
                 switch ( _type )
                 {
                     case null:
-                        return _input;
                     case StringPropertyType:
-                        return _input.Trim( '"' );
+                        return _input;
                     default:
                         if ( !_input.StartsWith( _type ) )
                             return _input;
                         return _input.Substring( _type.Length + 1 );
+                }
+            }
+
+            public static string? LDTK2GM( object? _input, string? _type )
+            {
+                if ( _input == null )
+                    return null;
+
+                switch ( _type )
+                {
+                    case null:
+                    case StringPropertyType:
+                        return _input.ToString();
+                    default:
+                        return $"{_type}.{_input.ToString()}";
                 }
             }
         }
@@ -184,32 +207,14 @@ public partial class LDTKProject
         public object tilesetUid { get; set; }
     }
 
-    public const string FlipStateEnumName = "FlipState";
 
-    private static readonly GMObjectProperty FlipProperty = new()
-    {
-        varType = eObjectPropertyType.List,
-        varName = FlipStateEnumName,
-        value = "None",
-        listItems = new ResourceList<string>() { "None", "Flip_X", "Flip_Y", "Flip_X_Y" }
-    };
-
-    public static LDTKProject.Enum GetFlipEnum( LDTKProject _ldtkProject )
-    {
-        if ( _ldtkProject.CrateOrExistingForced<Enum>( FlipStateEnumName, out var result ) )
-        {
-            result.values = FlipProperty.listItems.Select( _s => new Enum.Value() { id = _s } ).ToList();
-        }
-
-        return result;
-    }
 
     /// <summary>
     /// Returns all properties that given object has, including object they are defined in
     /// </summary>
     public static IEnumerable<GMObjectPropertyInfo> EnumerateAllProperties( GMObject _object )
     {
-        yield return new GMObjectPropertyInfo( FlipProperty, _object );
+        yield return new GMObjectPropertyInfo( SharedData.FlipProperty, _object );
 
         foreach ( GMObjectPropertyInfo info in GMProjectUtilities.EnumerateAllProperties( _object ) )
         {
@@ -221,7 +226,7 @@ public partial class LDTKProject
 
     public void UpdateEntity( Entity _entity, GMObject _object )
     {
-        var flipEnum = GetFlipEnum( this );
+        var flipEnum = SharedData.GetFlipEnum( this );
 
         List<GMObjectPropertyInfo> definedProperties = EnumerateAllProperties( _object ).ToList();
 
@@ -236,7 +241,8 @@ public partial class LDTKProject
         {
             _entity.RemoveUnusedMeta<Field.MetaData>( _properties.Select( t => t.varName), _s =>
             {
-                AnsiConsole.MarkupLineInterpolated( $"[blue]Property [underline]{_s}[/] in object [teal]{_object.name}[/] is missing. Removing...[/]" );
+                _entity.Remove<Field>(_s.identifier);
+                AnsiConsole.MarkupLineInterpolated( $"[blue]Property [underline]{_s.identifier}[/] in object [teal]{_object.name}[/] is missing. Removing...[/]" );
             } );
         }
 
@@ -255,7 +261,7 @@ public partial class LDTKProject
             if ( _info.Property.varType == eObjectPropertyType.List )
             {
                 InitializeListProperty( _info, out LDTKProject.Enum en, out type );
-                en.values.ForEach( t => t.id = Field.MetaData.ProcessValue( t.id, type ) );
+                en.values.ForEach( t => t.id = Field.MetaData.GM2LDTK( t.id, type ) );
 
                 fieldType.__type = string.Format( fieldType.__type, en.identifier );
                 fieldType.type = string.Format( fieldType.type, en.uid );
@@ -310,7 +316,7 @@ public partial class LDTKProject
 
         void InitializeListProperty( GMObjectPropertyInfo _info, out LDTKProject.Enum _enum, out string? _valueType )
         {
-            if ( _info.Property.varName == FlipStateEnumName )
+            if ( _info.Property.varName == SharedData.FlipStateEnumName )
             {
                 _enum = flipEnum;
                 _valueType = null;
@@ -376,7 +382,7 @@ public partial class LDTKProject
         try
         {
             if ( _type != null )
-                _value = Field.MetaData.ProcessValue( _value, _type );
+                _value = Field.MetaData.GM2LDTK( _value, _type );
 
             switch ( _property.varType )
             {

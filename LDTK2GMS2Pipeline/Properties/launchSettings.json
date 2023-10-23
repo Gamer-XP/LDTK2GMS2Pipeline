@@ -1,7 +1,22 @@
 {
   "profiles": {
-    "LDTK2GMS2Pipeline": {
+    "WSL": {
+      "commandName": "WSL2",
+      "distributionName": ""
+    },
+    "Youki Import": {
       "commandName": "Project",
+      "workingDirectory": "E:\\Work\\GMS2\\Youki\\working_files\\ldtk",
+      "hotReloadEnabled": false
+    },
+    "Umbrella Import": {
+      "commandName": "Project",
+      "workingDirectory": "E:\\Work\\GMS2\\Umbrella\\working_files\\ldtk",
+      "hotReloadEnabled": false
+    },
+    "Youki Export": {
+      "commandName": "Project",
+      "commandLineArgs": "--export",
       "workingDirectory": "E:\\Work\\GMS2\\Youki\\working_files\\ldtk",
       "hotReloadEnabled": false
     }
