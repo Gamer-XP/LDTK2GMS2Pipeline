@@ -2,12 +2,14 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using LDTK2GMS2Pipeline.LDTK;
 using Spectre.Console;
 using YoYoStudio.Resources;
 using static LDTK2GMS2Pipeline.LDTK.LDTKProject;
+using static LDTK2GMS2Pipeline.LDTK.LDTKProject.Enum;
 
 namespace LDTK2GMS2Pipeline.Sync;
 
@@ -16,6 +18,7 @@ internal class LDTKExporter
     public static async Task ExportToGM( GMProject _gmProject, LDTKProject _ldtkProject )
     {
         ProjectInfo.IsLoading = false;
+
         foreach (LDTKProject.Level level in _ldtkProject.levels)
         {
             ExportLevel( _gmProject, _ldtkProject, level);
@@ -31,7 +34,7 @@ internal class LDTKExporter
         GMRoom? room = _gmProject.FindResourceByName(_level.Meta?.identifier ?? _level.identifier, typeof(GMRoom)) as GMRoom;
         if (room == null)
         {
-            AnsiConsole.MarkupLineInterpolated($"New room [teal]{_level.identifier}[/] found");
+            AnsiConsole.MarkupLineInterpolated($"New room [teal]{_level.identifier}[/] added to GM project.");
             room = new GMRoom
             {
                 name = _level.identifier
@@ -172,11 +175,13 @@ internal class LDTKExporter
 
                 var sourceProperties = gmInstance.properties.ToDictionary(t => t.varName);
 
-                instance.RemoveDeletedItems<Level.FieldInstance.MetaData, GMOverriddenProperty>(gmInstance.properties, 
+                int count = instance.RemoveDeletedItems<Level.FieldInstance.MetaData, GMOverriddenProperty>(gmInstance.properties, 
                     (_, m) => m == null || !m.GotError, 
                     t => t.varName, 
                     t => t.Resource == null || t.Resource.IsOverridden || t.GotError );
-
+                if ( count > 0)
+                    Console.WriteLine($"Removed {count} from {gmInstance.objectId.name}");
+       
                 foreach ( LDTKProject.Level.FieldInstance fieldInstance in instance.fieldInstances )
                 {
                     if ( !fieldInstance.IsOverridden )
@@ -227,17 +232,91 @@ internal class LDTKExporter
 
                 gmInstance.x = x;
                 gmInstance.y = y;
-                gmInstance.scaleX = scaleX;
-                gmInstance.scaleY = scaleY;
-                gmInstance.flipX = flipX;
-                gmInstance.flipY = flipY;
+                gmInstance.scaleX = flipX? -scaleX : scaleX;
+                gmInstance.scaleY = flipY? -scaleY : scaleY;
             }
         }
 
         void ExportTiles(GMRTileLayer _tileLayer, LDTKProject.Level.Layer _layer, LDTKProject.Layer _layerDef )
         {
+            Tileset? tileset = _layer.overrideTilesetUid != null
+                ? _ldtkProject.GetResource<Tileset>(_layer.overrideTilesetUid )
+                : null;
 
+            var gmTileset = tileset?.Meta != null
+                ? _gmProject.FindResourceByName(tileset.Meta.identifier, typeof(GMTileSet)) as GMTileSet
+                : null;
+
+            _tileLayer.tilesetId = gmTileset;
+            if (gmTileset == null)
+            {
+                if ( _layer.overrideTilesetUid != null)
+                    AnsiConsole.MarkupLineInterpolated($"[red]Unable to find matching tileset with id{_layer.overrideTilesetUid}[/]");
+                return;
+            }
+
+            _tileLayer.x = _layer.pxOffsetX;
+            _tileLayer.y = _layer.pxOffsetY;
+
+            uint[,] newData = new uint[_layer.__cWid, _layer.__cHei];
+
+            var gmTilesetWidth = (gmTileset.spriteId.width - gmTileset.tilexoff + gmTileset.tilehsep) / (gmTileset.tileWidth + gmTileset.tilehsep);
+
+            foreach (Level.Layer.TileInstance tile in _layer.gridTiles)
+            {
+                bool flipX = (tile.f & 2) > 0;
+                bool flipY = (tile.f & 1) > 0;
+                int tilemapIndex = tile.d[0];
+
+                int tileIndex = tile.t;
+                int tileX = tileIndex % tileset.__cWid;
+                int tileY = tileIndex / tileset.__cWid;
+
+                int x = tilemapIndex % _layer.__cWid;
+                int y = tilemapIndex / _layer.__cWid;
+
+                uint finalIndex = (uint)(tileX + tileY * gmTilesetWidth);
+                if (flipX)
+                    finalIndex |= TileMap.TileBitMask_Flip;
+                if ( flipY )
+                    finalIndex |= TileMap.TileBitMask_Mirror;
+
+                if (x < 0 || y < 0 || x >= _layer.__cWid || y >= _layer.__cHei)
+                {
+                    throw new IndexOutOfRangeException($"Out of range: {x}, {y} not in range {_layer.__cWid}, {_layer.__cHei}, level {_level.identifier}");
+                }
+
+                newData[x, y] = finalIndex;
+            }
+
+            if (!TilemapsEqual(_tileLayer.tiles.Tiles, newData))
+            {
+                AnsiConsole.MarkupLineInterpolated($"Tiles changed at layer [green]{_tileLayer.name}[/] in [teal]{room.name}[/]");
+                _tileLayer.tiles.Tiles = newData;
+            }
         }
+    }
+
+    private const uint TileMaxIgnoredMask = ~(TileMap.TileBitMask_ColourIndex | TileMap.TileBitMask_Inherit | TileMap.TileBitMask_Rotate90);
+
+    private static bool TilemapsEqual( uint[,] _left, uint[,] _right )
+    {
+        if (_left.GetLength(0) != _right.GetLength(0))
+            return false;
+
+        if ( _left.GetLength(1) != _right.GetLength(1))
+            return false;
+
+        for (int y = _left.GetLength(1) - 1; y >= 0; y--)
+        for (int x = _left.GetLength(0) - 1; x >= 0; x--)
+        {
+            var l = _left[x, y] & TileMaxIgnoredMask;
+            var r = _right[x, y] & TileMaxIgnoredMask;
+            if (l != r)
+                return false;
+        }
+
+        return true;
     }
 
     private static Random UniqueNameRandom = new Random();

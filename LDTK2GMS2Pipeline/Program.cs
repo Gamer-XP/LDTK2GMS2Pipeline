@@ -1,9 +1,11 @@
-﻿using LDTK2GMS2Pipeline;
+﻿using System.Reflection;
+using LDTK2GMS2Pipeline;
 using LDTK2GMS2Pipeline.LDTK;
 using LDTK2GMS2Pipeline.Sync;
 using ProjectManager;
 using Spectre.Console;
 using CommandLine;
+using YoYoStudio.Resources;
 
 internal class Program
 {
@@ -43,6 +45,10 @@ internal class Program
         }
         else
         {
+            GMProjectUtilities.ResetDirty(gmProject);
+            foreach (var resource in gmProject.resources.Select( t => t.id)) 
+                GMProjectUtilities.ResetDirty(resource);
+
             await LDTKExporter.ExportToGM(gmProject, ldtkProject);
 
             await GMProjectUtilities.SaveGMProject(gmProject);

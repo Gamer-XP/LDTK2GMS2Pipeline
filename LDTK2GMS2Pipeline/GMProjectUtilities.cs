@@ -49,6 +49,9 @@ public static class GMProjectUtilities
 
     public static Task SaveGMProject(GMProject _project)
     {
+        if (!_project.isDirty)
+            return Task.CompletedTask;
+
         var loadingWait = new TaskCompletionSource();
 
         _project.Save(_sender =>
@@ -136,6 +139,16 @@ public static class GMProjectUtilities
     {
         var over = GetOverrideValue( _object, _property );
         return over?.value ?? _property.value;
+    }
+
+    private static readonly MethodInfo IsDirtyPropSetter = typeof(ResourceBase).GetProperty("isDirty",
+        BindingFlags.Default | BindingFlags.Instance | BindingFlags.Public)!.SetMethod!;
+
+    private static readonly object[] isDirtySetterParams = new object[] { false };
+
+    public static void ResetDirty(ResourceBase _resource)
+    {
+        IsDirtyPropSetter.Invoke(_resource, isDirtySetterParams);
     }
 
     class PlaceholderLicensingModule : ILicenseModulesSource

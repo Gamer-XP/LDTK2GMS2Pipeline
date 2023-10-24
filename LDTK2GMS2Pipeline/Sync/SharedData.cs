@@ -27,7 +27,7 @@ internal class SharedData
 
     public static LDTKProject.Enum GetFlipEnum( LDTKProject _ldtkProject )
     {
-        if ( _ldtkProject.CrateOrExistingForced<LDTKProject.Enum>( FlipStateEnumName, out var result ) )
+        if ( _ldtkProject.CreateOrExistingForced<LDTKProject.Enum>( FlipStateEnumName, out var result ) )
         {
             result.values = FlipProperty.listItems.Select( _s => new LDTKProject.Enum.Value() { id = _s } ).ToList();
         }

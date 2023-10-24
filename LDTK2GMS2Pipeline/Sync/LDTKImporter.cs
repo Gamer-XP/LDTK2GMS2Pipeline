@@ -124,6 +124,17 @@ internal static class LDTKImporter
             List<GMRLayer>? gmLayers = room.AllLayers();
             foreach (Layer layerDef in _project.defs.layers)
             {
+                if (level.CreateOrExistingForced<Level.Layer>(layerDef.identifier, out var layer))
+                {
+                    layer.__type = layerDef.__type;
+                    layer.__gridSize = layerDef.gridSize;
+                    layer.seed = Random.Shared.Next( 9999999 );
+                    layer.__cWid = (room.roomSettings.Width + layerDef.gridSize - 1) / layerDef.gridSize;
+                    layer.__cHei = (room.roomSettings.Height + layerDef.gridSize - 1) / layerDef.gridSize;
+                    layer.levelId = level.uid;
+                    layer.layerDefUid = layerDef.uid;
+                }
+
                 var gmLayer = gmLayers.Find(t => t.name == layerDef.identifier);
                 if (gmLayer == null)
                     continue;
@@ -132,19 +143,6 @@ internal static class LDTKImporter
                 {
                     AnsiConsole.MarkupLineInterpolated( $"[yellow]Layer types do not match for [green]{layerDef.identifier}[/] in [olive]{room.name}[/]: {gmLayer.GetType().Name} vs {layerDef.__type}[/]" );
                     continue;
-                }
-
-                Level.Layer? layer = level.layerInstances.Find(t => t.layerDefUid == layerDef.uid);
-                if (layer == null)
-                {
-                    layer = level.Create<Level.Layer>(layerDef.identifier);
-                    layer.__type = layerDef.__type;
-                    layer.__gridSize = layerDef.gridSize;
-                    layer.seed = Random.Shared.Next(9999999);
-                    layer.__cWid = (room.roomSettings.Width + layerDef.gridSize - 1) / layerDef.gridSize;
-                    layer.__cHei = (room.roomSettings.Height + layerDef.gridSize - 1) / layerDef.gridSize;
-                    layer.levelId = level.uid;
-                    layer.layerDefUid = layerDef.uid;
                 }
 
                 layer.visible = gmLayer.visible;
@@ -188,7 +186,7 @@ internal static class LDTKImporter
                             int posX = (int)gmInstance.x;
                             int posY = (int)gmInstance.y;
 
-                            if (layer.CrateOrExistingForced(gmInstance.name, out Level.EntityInstance instance))
+                            if (layer.CreateOrExistingForced(gmInstance.name, out Level.EntityInstance instance))
                             {
                                 instance.__pivot = new List<double>() { entityType.pivotX, entityType.pivotY };
                                 instance.__identifier = entityType.identifier;
@@ -215,7 +213,8 @@ internal static class LDTKImporter
                             {
                                 if (GetField(SharedData.FlipStateEnumName, out Field.MetaData fieldMeta))
                                 {
-                                    instance.CrateOrExistingForced(fieldMeta.identifier, out Level.FieldInstance fi );
+                                    instance.CreateOrExistingForced(fieldMeta.identifier, out Level.FieldInstance fi, fieldMeta.uid);
+
                                     fi.SetValue( DefaultOverride.IdTypes.V_String, flipEnum.values[flipIndex].id );
                                 }
                             }
@@ -232,7 +231,8 @@ internal static class LDTKImporter
                                     continue;
                                 }
 
-                                instance.CrateOrExistingForced( fieldMeta.identifier, out Level.FieldInstance fi );
+                                instance.CreateOrExistingForced(fieldMeta.identifier, out Level.FieldInstance fi, fieldMeta.uid);
+
                                 fi.Meta.GotError = false;
                                 fi.SetValue(result);
                             }
@@ -302,7 +302,7 @@ internal static class LDTKImporter
 
     private static Tileset GetAtlasTileset(LDTKProject _ldtkProject, bool _atlasUpdated, SpriteAtlas _atlas)
     {
-        _atlasUpdated |= _ldtkProject.CrateOrExistingForced(SharedData.EntityAtlasName, out Tileset tileset);
+        _atlasUpdated |= _ldtkProject.CreateOrExistingForced(SharedData.EntityAtlasName, out Tileset tileset);
 
         if (!_atlasUpdated)
             return tileset;

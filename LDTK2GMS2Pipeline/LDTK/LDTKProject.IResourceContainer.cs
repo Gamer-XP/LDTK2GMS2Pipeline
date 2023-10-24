@@ -229,7 +229,7 @@ public static class IResourceContainerUtilities
     /// <summary>
     /// Creates new resource of given type
     /// </summary>
-    public static TResource Create<TResource>( this LDTKProject.IResourceContainer _container, string _name )
+    public static TResource Create<TResource>( this LDTKProject.IResourceContainer _container, string _name, object? _id = null )
         where TResource : IResource, new()
     {
         var key = new ResourceKey( _name, typeof( TResource ) );
@@ -270,10 +270,10 @@ public static class IResourceContainerUtilities
         else
         {
             if ( !existingResource )
-                result.uid = _container.GetNewUid( result );
+                result.uid = _id ?? _container.GetNewUid( result );
             result.Meta = result.CreateMeta( _name );
 
-            IList metaList = (IList) _container.GetMetaList( result.MetaType );
+            IList metaList = _container.GetMetaList( result.MetaType );
             metaList.Add( result.Meta );
         }
 
@@ -331,7 +331,7 @@ public static class IResourceContainerUtilities
     /// Returns resource with given name, or create it if missing.
     /// Resource MAY be null if it was removed manually on LDTK side later.
     /// </summary>
-    public static bool CreateOrExisting<T>( this LDTKProject.IResourceContainer _container, string _name, out T? _resource )
+    public static bool CreateOrExisting<T>( this LDTKProject.IResourceContainer _container, string _name, out T? _resource, object? _id = null )
         where T : IResource, new()
     {
         var key = new ResourceKey(_name, typeof(T));
@@ -350,7 +350,7 @@ public static class IResourceContainerUtilities
             return false;
         }
 
-        _resource = _container.Create<T>( _name );
+        _resource = _container.Create<T>( _name, _id );
         return true;
     }
 
@@ -358,17 +358,17 @@ public static class IResourceContainerUtilities
     /// Returns resource with given name, or create it if missing.
     /// If resource was removed in LDTK - will recreate it.
     /// </summary>
-    public static bool CrateOrExistingForced<T>( this LDTKProject.IResourceContainer _container, string _name, out T _resource )
+    public static bool CreateOrExistingForced<T>( this LDTKProject.IResourceContainer _container, string _name, out T _resource, object? _id = null )
         where T : IResource, new()
     {
-        bool result = _container.CreateOrExisting( _name, out T? resourceTemp );
+        bool result = _container.CreateOrExisting( _name, out T? resourceTemp, _id );
         if ( resourceTemp != null )
         {
             _resource = resourceTemp;
             return result;
         }
 
-        _resource = _container.Create<T>( _name );
+        _resource = _container.Create<T>( _name, _id );
         return true;
     }
 

@@ -325,7 +325,7 @@ public partial class LDTKProject
 
             string enumName = ProduceEnumName( _info.DefinedIn, _info.Property );
 
-            this.CrateOrExistingForced( enumName, out _enum );
+            this.CreateOrExistingForced( enumName, out _enum );
 
             _valueType = _enum.GetType( _info.Property );
         }
