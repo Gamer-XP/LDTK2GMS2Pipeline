@@ -94,11 +94,20 @@ public partial class LDTKProject
             public bool visible { get; set; }
             public List<object> optionalRules { get; set; } = new();
             public List<int> intGridCsv { get; set; } = new();
-            public List<AutoLayerTile> autoLayerTiles { get; set; } = new();
+            public List<TileInstance> autoLayerTiles { get; set; } = new();
             public int seed { get; set; }
             public int? overrideTilesetUid { get; set; }
             public List<TileInstance> gridTiles { get; set; } = new();
             public List<EntityInstance> entityInstances { get; set; } = new();
+
+            public IEnumerable<TileInstance> EnumerateAllTiles()
+            {
+                foreach (var tile in gridTiles)
+                    yield return tile;
+
+                foreach( var tile in autoLayerTiles)
+                    yield return tile;
+            }
 
             ResourceCache IResourceContainer.Cache { get; } = new();
 
@@ -120,16 +129,6 @@ public partial class LDTKProject
             public IList GetMetaList( Type _type )
             {
                 return _type == typeof( EntityInstance.MetaData ) ? Meta?.Entities ?? throw new Exception( "Meta is null. Initialize it first." ) : throw new Exception( $"Unsupported type: {_type}" );
-            }
-
-            public sealed class AutoLayerTile
-            {
-                public IList<int> px { get; set; }
-                public IList<int> src { get; set; }
-                public int f { get; set; }
-                public int t { get; set; }
-                public IList<int> d { get; set; }
-                public int a { get; set; }
             }
 
             public sealed class TileInstance

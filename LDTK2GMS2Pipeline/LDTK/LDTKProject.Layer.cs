@@ -107,7 +107,7 @@ public partial class LDTKProject
                     return _type == LayerTypes.Entities;
 
                 case GMRTileLayer:
-                    return _type == LayerTypes.Tiles;
+                    return _type == LayerTypes.Tiles;// || _type == LayerTypes.AutoLayer || _type == LayerTypes.IntGrid;
 
                 default:
                     return false;

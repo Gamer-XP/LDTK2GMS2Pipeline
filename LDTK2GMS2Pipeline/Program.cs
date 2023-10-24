@@ -39,7 +39,7 @@ internal class Program
 
         if ( !_options.IsExport )
         {
-            await LDTKImporter.ImportToLDTK( gmProject, ldtkProject );
+            await GM2LDTK.ImportToLDTK( gmProject, ldtkProject );
 
             await ldtkProject.Save( SaveDebug ? DebugEnding : string.Empty );
         }
@@ -49,7 +49,7 @@ internal class Program
             foreach (var resource in gmProject.resources.Select( t => t.id)) 
                 GMProjectUtilities.ResetDirty(resource);
 
-            await LDTKExporter.ExportToGM(gmProject, ldtkProject);
+            await LDTK2GM.ExportToGM(gmProject, ldtkProject);
 
             await GMProjectUtilities.SaveGMProject(gmProject);
         }

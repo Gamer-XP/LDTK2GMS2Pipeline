@@ -13,7 +13,7 @@ using Rule = Spectre.Console.Rule;
 
 namespace LDTK2GMS2Pipeline.Sync;
 
-internal static class LDTKImporter
+internal static class GM2LDTK
 {
     public static async Task ImportToLDTK(GMProject _gmProject, LDTKProject _ldtkProject)
     {
