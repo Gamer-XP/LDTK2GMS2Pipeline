@@ -1,24 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using RectpackSharp;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Numerics;
-using System.Reflection;
-using System.Runtime.CompilerServices;
-using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using System.Threading;
-using System.Threading.Tasks;
-using ProjectManager;
-using RectpackSharp;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
 using YoYoStudio.Resources;
-using static ProjectManager.GameMaker.GMS2Project;
 
 namespace LDTK2GMS2Pipeline;
 
@@ -49,11 +34,11 @@ public class SpriteAtlas
         public GMSprite Sprite { get; }
         public Image<Rgba32>? AtlasImage { get; set; }
         public AtlasRectangle? PreviousRectangle { get; set; } = null;
-        public AtlasRectangle Rectangle { get; set; } = new ();
+        public AtlasRectangle Rectangle { get; set; } = new();
         public bool IsModified = false;
         public FileInfo ImagePath { get; }
 
-        public AtlasItem(GMSprite _sprite)
+        public AtlasItem( GMSprite _sprite )
         {
             Sprite = _sprite;
             var path = System.IO.Path.Combine( Path.GetDirectoryName( ProjectInfo.GetProjectPath( Sprite.project ) ), Sprite.GetCompositePaths()[0] );
@@ -61,10 +46,10 @@ public class SpriteAtlas
         }
     }
 
-    public SpriteAtlas(string _filePath, int _cellSize = 16 )
+    public SpriteAtlas( string _filePath, int _cellSize = 16 )
     {
-        imageFile = new FileInfo(_filePath);
-        metaFile = new FileInfo(Path.ChangeExtension( _filePath, ".meta") );
+        imageFile = new FileInfo( _filePath );
+        metaFile = new FileInfo( Path.ChangeExtension( _filePath, ".meta" ) );
 
         cellSize = _cellSize;
 
@@ -73,29 +58,29 @@ public class SpriteAtlas
 
     public void Add( GMSprite _sprite )
     {
-        Debug.Assert(_sprite != null);
+        Debug.Assert( _sprite != null );
 
-        if (!items.TryGetValue(_sprite.name, out var info))
+        if ( !items.TryGetValue( _sprite.name, out var info ) )
         {
-            info = new AtlasItem(_sprite);
-            items.Add(_sprite.name, info);
+            info = new AtlasItem( _sprite );
+            items.Add( _sprite.name, info );
         }
 
         info.IsModified |= IsSpriteUpdateNeeded( info );
     }
 
-    public void Add(IEnumerable<GMSprite> _sprites)
+    public void Add( IEnumerable<GMSprite> _sprites )
     {
-        foreach ( GMSprite sprite in _sprites) 
-            Add(sprite);
+        foreach ( GMSprite sprite in _sprites )
+            Add( sprite );
     }
 
     /// <summary>
     /// Returns item for sprite with given name
     /// </summary>
-    public IAtlasItem? Get( string? _name)
+    public IAtlasItem? Get( string? _name )
     {
-        return _name == null? null : items.GetValueOrDefault(_name);
+        return _name == null ? null : items.GetValueOrDefault( _name );
     }
 
     /// <summary>
@@ -103,12 +88,12 @@ public class SpriteAtlas
     /// </summary>
     public IAtlasItem? Get( Rectangle _rect, bool _checkPrevious )
     {
-        foreach (AtlasItem item in items.Values)
+        foreach ( AtlasItem item in items.Values )
         {
             AtlasRectangle rect;
-            if (_checkPrevious)
+            if ( _checkPrevious )
             {
-                if ( item.PreviousRectangle == null)
+                if ( item.PreviousRectangle == null )
                     continue;
 
                 rect = item.PreviousRectangle;
@@ -118,7 +103,7 @@ public class SpriteAtlas
                 rect = item.Rectangle;
             }
 
-            if (rect.Contains(_rect))
+            if ( rect.Contains( _rect ) )
                 return item;
         }
 
@@ -130,8 +115,8 @@ public class SpriteAtlas
     /// </summary>
     public Rectangle? UpdatePosition( Rectangle _rect )
     {
-        var item = Get(_rect, true);
-        if (item == null)
+        var item = Get( _rect, true );
+        if ( item == null )
             return null;
 
         var prev = item.PreviousRectangle!;
@@ -154,11 +139,11 @@ public class SpriteAtlas
 
     private bool NeedRegeneration( AtlasMeta _meta )
     {
-        if (!imageFile.Exists || !metaFile.Exists || items.Any(t => t.Value.IsModified))
+        if ( !imageFile.Exists || !metaFile.Exists || items.Any( t => t.Value.IsModified ) )
             return true;
 
-        HashSet<string> keys = new HashSet<string>(_meta.Items.Keys);
-        bool spriteListsMatch = keys.SetEquals(items.Keys);
+        HashSet<string> keys = new HashSet<string>( _meta.Items.Keys );
+        bool spriteListsMatch = keys.SetEquals( items.Keys );
 
         return !spriteListsMatch;
     }
@@ -166,11 +151,11 @@ public class SpriteAtlas
     public async Task<bool> Update()
     {
         var meta = await LoadMeta();
-        
-        if (!NeedRegeneration(meta))
+
+        if ( !NeedRegeneration( meta ) )
         {
-            ApplyMeta(meta);
-            Console.WriteLine("Atlas is up to date.");
+            ApplyMeta( meta );
+            Console.WriteLine( "Atlas is up to date." );
             return false;
         }
 
@@ -182,7 +167,7 @@ public class SpriteAtlas
         Height = atlas.Height;
 
         Directory.CreateDirectory( imageFile.DirectoryName );
-        await atlas.SaveAsync(imageFile.FullName);
+        await atlas.SaveAsync( imageFile.FullName );
         await SaveMeta();
 
         return true;
@@ -192,7 +177,7 @@ public class SpriteAtlas
     {
         PackingRectangle[] rectangles = new PackingRectangle[items.Count];
         AtlasItem[] spritList = items.Values.ToArray();
-        for (int i = spritList.Length - 1; i >= 0; i--)
+        for ( int i = spritList.Length - 1; i >= 0; i-- )
         {
             var info = spritList[i];
             rectangles[i] = new PackingRectangle( 0, 0, (uint) info.AtlasImage!.Width, (uint) info.AtlasImage.Height, i );
@@ -227,12 +212,12 @@ public class SpriteAtlas
 
     private async Task UpdateImages()
     {
-        foreach (AtlasItem info in items.Values)
+        foreach ( AtlasItem info in items.Values )
         {
-            if (info.AtlasImage != null )
+            if ( info.AtlasImage != null )
                 continue;
 
-            var img = await MakeAtlasImage(info);
+            var img = await MakeAtlasImage( info );
             info.AtlasImage = img.image;
             info.Rectangle = img.rect;
         }
@@ -240,8 +225,8 @@ public class SpriteAtlas
 
     async Task<AtlasMeta> LoadMeta()
     {
-        if (!metaFile.Exists)
-            return new ();
+        if ( !metaFile.Exists )
+            return new();
 
         // Loading data from existing sprite atlas
         await using FileStream file = metaFile.OpenRead();
@@ -255,7 +240,7 @@ public class SpriteAtlas
         meta.AtlasHeight = Height;
         meta.Items = items.ToDictionary( t => t.Key, t => t.Value.Rectangle );
         await using var jsonFile = File.Open( metaFile.FullName, FileMode.Create );
-        await JsonSerializer.SerializeAsync( jsonFile, meta, new JsonSerializerOptions() { WriteIndented = true} );
+        await JsonSerializer.SerializeAsync( jsonFile, meta, new JsonSerializerOptions() { WriteIndented = true } );
     }
 
     void ApplyMeta( AtlasMeta _meta )
@@ -276,17 +261,17 @@ public class SpriteAtlas
 
     async Task LoadImagesFromAtlas( AtlasMeta _meta )
     {
-        if (!imageFile.Exists )
+        if ( !imageFile.Exists )
             return;
 
         Image<Rgba32> atlas = await Image.LoadAsync<Rgba32>( imageFile.FullName );
 
-        foreach (var pair in _meta.Items )
+        foreach ( var pair in _meta.Items )
         {
-            if (!items.TryGetValue(pair.Key, out var info))
+            if ( !items.TryGetValue( pair.Key, out var info ) )
                 continue;
 
-            if (info.IsModified)
+            if ( info.IsModified )
                 continue;
 
             Debug.Assert( info.AtlasImage == null );
@@ -315,7 +300,7 @@ public class SpriteAtlas
         int width, height;
 
         // Use small centered sprites as is
-        if (sprite.width <= cellSize && sprite.height <= cellSize && sprite.xorigin == sprite.width/2 && sprite.yorigin == sprite.height/2)
+        if ( sprite.width <= cellSize && sprite.height <= cellSize && sprite.xorigin == sprite.width / 2 && sprite.yorigin == sprite.height / 2 )
         {
             width = cellSize;
             height = cellSize;
@@ -330,10 +315,10 @@ public class SpriteAtlas
             width = Math.Abs( relativePivot.X - 0.5f ) < 0.01f ? Math.Max( left, right ) * 2 : (relativePivot.X > 0.5f ? left : right);
             height = Math.Abs( relativePivot.Y - 0.5f ) < 0.01f ? Math.Max( top, bottom ) * 2 : (relativePivot.Y > 0.5f ? top : bottom);
         }
-        
 
-        int maxSize = Math.Max(width, height);
-        if (maxSize <= cellSize * 8)
+
+        int maxSize = Math.Max( width, height );
+        if ( maxSize <= cellSize * 8 )
         {
             width = maxSize;
             height = maxSize;
@@ -342,22 +327,22 @@ public class SpriteAtlas
         int trimRectPivotX = (int) (width * relativePivot.X);
         int trimRectPivotY = (int) (height * relativePivot.Y);
 
-        int putX = Math.Clamp(trimRectPivotX - sprite.xorigin + trimRect.Left, 0, width - 1);
-        int putY = Math.Clamp(trimRectPivotY - sprite.yorigin + trimRect.Top, 0, height - 1);
+        int putX = Math.Clamp( trimRectPivotX - sprite.xorigin + trimRect.Left, 0, width - 1 );
+        int putY = Math.Clamp( trimRectPivotY - sprite.yorigin + trimRect.Top, 0, height - 1 );
 
         spriteImage.Mutate( t => t.Resize( new ResizeOptions()
         {
             Mode = ResizeMode.Manual,
             Position = AnchorPositionMode.Bottom,
-            Size = new Size(width, height),
+            Size = new Size( width, height ),
             TargetRectangle = new Rectangle( putX, putY, spriteImage.Width, spriteImage.Height ),
         } ) );
 
         rectangle.Width = width;
         rectangle.Height = height;
-        rectangle.EmptyLeft = Math.Max(0, putX );
+        rectangle.EmptyLeft = Math.Max( 0, putX );
         rectangle.EmptyRight = Math.Max( 0, width - putX - trimRect.Width );
-        rectangle.EmptyTop = Math.Max(0, putY );
+        rectangle.EmptyTop = Math.Max( 0, putY );
         rectangle.EmptyBottom = Math.Max( 0, height - putY - trimRect.Height );
         rectangle.PaddingLeft = putX - trimRect.Left;
         rectangle.PaddingTop = putY - trimRect.Top;
@@ -374,8 +359,8 @@ public class SpriteAtlas
     private Vector2 GetSnappedPivot( GMSprite _sprite, int _trimPivotX, int _trimPivotY, int _trimWidth, int _trimHeight )
     {
         Vector2 relativePivot = default;
-        
-        if (!SnapPivotPerfect(ref relativePivot.X, _sprite.xorigin, _sprite.width) )
+
+        if ( !SnapPivotPerfect( ref relativePivot.X, _sprite.xorigin, _sprite.width ) )
             SnapPivot( ref relativePivot.X, _trimPivotX, _trimWidth );
 
         if ( !SnapPivotPerfect( ref relativePivot.Y, _sprite.yorigin, _sprite.height ) )
@@ -386,19 +371,19 @@ public class SpriteAtlas
 
     bool SnapPivotPerfect( ref float _pivot, int _pivotReal, int _size )
     {
-        if (Math.Abs( _pivotReal - 1)  <= 1)
+        if ( Math.Abs( _pivotReal - 1 ) <= 1 )
         {
             _pivot = 0f;
             return true;
         }
 
-        if (Math.Abs( _pivotReal - _size) <= 1)
+        if ( Math.Abs( _pivotReal - _size ) <= 1 )
         {
             _pivot = 1f;
             return true;
         }
 
-        if (Math.Abs( _pivotReal - _size / 2 ) <= 1 )
+        if ( Math.Abs( _pivotReal - _size / 2 ) <= 1 )
         {
             _pivot = 0.5f;
             return true;
@@ -423,12 +408,12 @@ public class SpriteAtlas
 
     public int CeilToGrid( int _value )
     {
-        return cellSize * (int) MathF.Ceiling(_value / (float)cellSize);
+        return cellSize * (int) MathF.Ceiling( _value / (float) cellSize );
     }
 
-    public int RoundToGrid(int _value)
+    public int RoundToGrid( int _value )
     {
-        return cellSize * Math.Max(1, (int) MathF.Round( _value / (float) cellSize ) );
+        return cellSize * Math.Max( 1, (int) MathF.Round( _value / (float) cellSize ) );
     }
 
     [System.Serializable]
@@ -519,7 +504,7 @@ public class SpriteAtlas
             set => Empty[3] = value;
         }
 
-        public AtlasRectangle SetFrom( PackingRectangle _source  )
+        public AtlasRectangle SetFrom( PackingRectangle _source )
         {
             X = (int) _source.X;
             Y = (int) _source.Y;
@@ -533,28 +518,28 @@ public class SpriteAtlas
             return _rectangle.Left >= X && _rectangle.Top >= Y && _rectangle.Right <= X + Width && _rectangle.Bottom <= Y + Height;
         }
 
-        public bool Equals(AtlasRectangle? other)
+        public bool Equals( AtlasRectangle? other )
         {
-            if (ReferenceEquals(null, other)) return false;
-            if (ReferenceEquals(this, other)) return true;
+            if ( ReferenceEquals( null, other ) ) return false;
+            if ( ReferenceEquals( this, other ) ) return true;
             return X == other.X && Y == other.Y && Width == other.Width && Height == other.Height;
         }
 
-        public override bool Equals(object? obj)
+        public override bool Equals( object? obj )
         {
-            if (ReferenceEquals(null, obj)) return false;
-            if (ReferenceEquals(this, obj)) return true;
-            if (obj.GetType() != this.GetType()) return false;
-            return Equals((AtlasRectangle)obj);
+            if ( ReferenceEquals( null, obj ) ) return false;
+            if ( ReferenceEquals( this, obj ) ) return true;
+            if ( obj.GetType() != this.GetType() ) return false;
+            return Equals( (AtlasRectangle) obj );
         }
 
         public override int GetHashCode()
         {
             var hashCode = new HashCode();
-            hashCode.Add(X);
-            hashCode.Add(Y);
-            hashCode.Add(Width);
-            hashCode.Add(Height);
+            hashCode.Add( X );
+            hashCode.Add( Y );
+            hashCode.Add( Width );
+            hashCode.Add( Height );
             return hashCode.ToHashCode();
         }
     }

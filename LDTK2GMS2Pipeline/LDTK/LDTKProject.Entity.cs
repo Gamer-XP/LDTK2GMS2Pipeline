@@ -2,10 +2,11 @@
 using Spectre.Console;
 using System.Text.RegularExpressions;
 using YoYoStudio.Resources;
-using static LDTK2GMS2Pipeline.GMProjectUtilities;
+using static LDTK2GMS2Pipeline.Utilities.GMProjectUtilities;
 using System.Reflection;
 using LDTK2GMS2Pipeline.Sync;
 using Microsoft.VisualBasic.FileIO;
+using LDTK2GMS2Pipeline.Utilities;
 
 namespace LDTK2GMS2Pipeline.LDTK;
 

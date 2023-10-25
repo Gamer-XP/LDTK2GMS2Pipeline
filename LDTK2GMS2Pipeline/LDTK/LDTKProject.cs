@@ -1,8 +1,7 @@
-﻿using ProjectManager;
-using Spectre.Console;
-using System.Collections;
+﻿using System.Collections;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using LDTK2GMS2Pipeline.Utilities;
 
 namespace LDTK2GMS2Pipeline.LDTK;
 
@@ -44,23 +43,11 @@ public partial class LDTKProject : LDTKProject.IResourceContainer
         return nextUid++;
     }
 
-    public static async Task<LDTKProject> Load( string? _filterByEnding = null )
-    {
-        var files = IProjectUtilities.FindProjectFilesHere( ".ldtk" );
-        FileInfo? ldtkProjectFile;
-        if ( _filterByEnding != null )
-            files = files.Where( t => Path.GetFileNameWithoutExtension( t.Name ).EndsWith(_filterByEnding) );
-
-        ldtkProjectFile = files.FirstOrDefault();
-
-        if ( ldtkProjectFile is null )
-            throw new Exception( "LDTK project not found" );
-
-        return await LDTKProject.Load( ldtkProjectFile );
-    }
-
     public static async Task<LDTKProject> Load( FileInfo _file )
     {
+        if ( _file is null )
+            throw new Exception( "LDTK project not found" );
+
         await using var file = File.OpenRead( _file.FullName );
 
         var project = await JsonSerializer.DeserializeAsync<LDTKProject>( file );

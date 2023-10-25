@@ -1,11 +1,5 @@
-﻿using ProjectManager;
-using System.Collections;
-using System.Collections.Generic;
-using System.Reflection.Metadata;
+﻿using System.Collections;
 using System.Text.Json.Serialization;
-using static LDTK2GMS2Pipeline.LDTK.LDTKProject;
-using static LDTK2GMS2Pipeline.LDTK.LDTKProject.Layer;
-using static LDTK2GMS2Pipeline.LDTK.LDTKProject.Level;
 
 namespace LDTK2GMS2Pipeline.LDTK;
 

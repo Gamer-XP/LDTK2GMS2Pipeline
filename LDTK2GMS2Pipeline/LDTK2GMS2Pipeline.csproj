@@ -39,11 +39,8 @@
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
     <PackageReference Include="RectpackSharp" Version="1.1.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.0.2" />
     <PackageReference Include="Spectre.Console" Version="0.47.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\..\ProjectManager\ProjectManager.csproj" />
   </ItemGroup>
 
   <ItemGroup>

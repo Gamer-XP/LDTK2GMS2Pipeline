@@ -1,11 +1,8 @@
-﻿using ProjectManager;
-using Spectre.Console;
+﻿using Spectre.Console;
 using System.Collections;
-using System.Collections.Generic;
 using YoYoStudio.Resources;
 
 using static LDTK2GMS2Pipeline.LDTK.LDTKProject;
-using static ProjectManager.GameMaker.GMS2Project;
 using IResource = LDTK2GMS2Pipeline.LDTK.LDTKProject.IResource;
 
 namespace LDTK2GMS2Pipeline.LDTK;
@@ -33,15 +30,15 @@ public partial class LDTKProject
             metaByName.Clear();
         }
 
-        public bool RemoveResource(IResource _resource)
+        public bool RemoveResource( IResource _resource )
         {
-            resourceById.Remove(_resource.uid);
-            return resourceByName.Remove(new ResourceKey(_resource.identifier, _resource.GetType()));
+            resourceById.Remove( _resource.uid );
+            return resourceByName.Remove( new ResourceKey( _resource.identifier, _resource.GetType() ) );
         }
 
         public bool RemoveMeta( IMeta _meta )
         {
-            return metaByName.Remove(new ResourceKey(_meta.identifier, _meta.GetType()));
+            return metaByName.Remove( new ResourceKey( _meta.identifier, _meta.GetType() ) );
         }
 
         public void AddResource( IResource _resource )
@@ -86,7 +83,7 @@ public partial class LDTKProject
             where T : IResource
 
         {
-            return (List<T>)GetResourceList(typeof(T));
+            return (List<T>) GetResourceList( typeof( T ) );
         }
 
         public List<T> GetMetaList<T>()
@@ -109,7 +106,7 @@ public static class IResourceContainerUtilities
 
     public static LoggingLevel EnableLogging = LoggingLevel.Auto;
 
-    private static bool LogsNeeded(Type _type)
+    private static bool LogsNeeded( Type _type )
     {
         switch ( EnableLogging )
         {
@@ -118,20 +115,20 @@ public static class IResourceContainerUtilities
             case LoggingLevel.On:
                 return true;
             default:
-                return _type != typeof( Field ) && _type != typeof( Level.Layer ) && _type != typeof( Level.EntityInstance ) && _type != typeof(Level.FieldInstance);
+                return _type != typeof( Field ) && _type != typeof( Level.Layer ) && _type != typeof( Level.EntityInstance ) && _type != typeof( Level.FieldInstance );
         }
     }
 
     public static LDTKProject TryGetProject( object _resource )
     {
-        switch (_resource)
+        switch ( _resource )
         {
             case LDTKProject project:
                 return project;
             case IResource res:
                 return res.Project;
             default:
-                throw new Exception($"Object got no project references: {_resource.GetType()}");
+                throw new Exception( $"Object got no project references: {_resource.GetType()}" );
         }
     }
 
@@ -167,14 +164,14 @@ public static class IResourceContainerUtilities
     /// </summary>
     public static void UpdateResourceCache( this LDTKProject.IResourceContainer _container )
     {
-        var project = TryGetProject(_container);
+        var project = TryGetProject( _container );
         _container.Cache.ClearResources();
-        foreach (IResource resource in _container.GetResources())
+        foreach ( IResource resource in _container.GetResources() )
         {
             resource.Project = project;
-            _container.Cache.AddResource(resource);
+            _container.Cache.AddResource( resource );
 
-            if (resource is LDTKProject.IResourceContainer container)
+            if ( resource is LDTKProject.IResourceContainer container )
                 container.UpdateResourceCache();
         }
     }
@@ -199,7 +196,7 @@ public static class IResourceContainerUtilities
                     res.Meta = meta;
                     _container.Cache.AddMeta( meta );
 
-                    if (res is LDTKProject.IResourceContainer otherContainer)
+                    if ( res is LDTKProject.IResourceContainer otherContainer )
                         otherContainer.UpdateMetaCache();
                 }
                 else
@@ -241,7 +238,7 @@ public static class IResourceContainerUtilities
         {
             result = (TResource) resource;
             existingResource = true;
-            if ( LogsNeeded(typeof(TResource)) )
+            if ( LogsNeeded( typeof( TResource ) ) )
                 AnsiConsole.MarkupLineInterpolated( $"Found a new {typeof( TResource ).Name} [teal]{_name}[/]" );
         }
         else
@@ -250,7 +247,7 @@ public static class IResourceContainerUtilities
             {
                 identifier = _name
             };
-            result.Project = TryGetProject(_container);
+            result.Project = TryGetProject( _container );
             existingResource = false;
             var resourceList = _container.GetResourceList<TResource>();
             resourceList.Add( result );
@@ -288,7 +285,7 @@ public static class IResourceContainerUtilities
     /// </summary>
     public static void CreateMetaFor( this LDTKProject.IResourceContainer _container, IResource _resource, string _name )
     {
-        if ( _resource.Meta != null)
+        if ( _resource.Meta != null )
             return;
 
         var key = new ResourceKey( _resource.identifier, _resource.GetType() );
@@ -296,8 +293,8 @@ public static class IResourceContainerUtilities
         if ( _container.Cache.TryGetMeta( key, out _ ) )
             return;
 
-        _resource.Meta = _resource.CreateMeta(_name);
-        
+        _resource.Meta = _resource.CreateMeta( _name );
+
         IList metaList = _container.GetMetaList( _resource.MetaType );
         metaList.Add( _resource.Meta );
         _container.Cache.AddMeta( _resource.Meta );
@@ -309,7 +306,7 @@ public static class IResourceContainerUtilities
     public static TMeta CreateMetaFor<TMeta>( this LDTKProject.IResourceContainer _container, string _name, object _uid )
         where TMeta : IMeta, new()
     {
-        var key = new ResourceKey( _name, typeof(TMeta) );
+        var key = new ResourceKey( _name, typeof( TMeta ) );
 
         if ( _container.Cache.TryGetMeta( key, out var existing ) )
             return (TMeta) existing;
@@ -320,7 +317,7 @@ public static class IResourceContainerUtilities
             identifier = _name
         };
 
-        IList metaList = _container.GetMetaList( typeof(TMeta) );
+        IList metaList = _container.GetMetaList( typeof( TMeta ) );
         metaList.Add( meta );
         _container.Cache.AddMeta( meta );
 
@@ -334,18 +331,18 @@ public static class IResourceContainerUtilities
     public static bool CreateOrExisting<T>( this LDTKProject.IResourceContainer _container, string _name, out T? _resource, object? _id = null )
         where T : IResource, new()
     {
-        var key = new ResourceKey(_name, typeof(T));
+        var key = new ResourceKey( _name, typeof( T ) );
         if ( _container.Cache.TryGetMeta( key, out var meta ) )
         {
             _resource = (T) meta.Resource;
-            if (_resource is null && _container.Cache.TryGetResource( key, out var res ) )
+            if ( _resource is null && _container.Cache.TryGetResource( key, out var res ) )
             {
                 _resource = (T) res;
                 _resource.Meta = meta;
                 meta.Resource = _resource;
                 meta.uid = _resource.uid;
                 if ( LogsNeeded( typeof( T ) ) )
-                    AnsiConsole.MarkupLineInterpolated($"Restored removed resource [teal]{_resource.identifier}[/] as {meta.identifier}");
+                    AnsiConsole.MarkupLineInterpolated( $"Restored removed resource [teal]{_resource.identifier}[/] as {meta.identifier}" );
             }
             return false;
         }
@@ -372,25 +369,25 @@ public static class IResourceContainerUtilities
         return true;
     }
 
-    public static bool Remove<TResource>(this LDTKProject.IResourceContainer _container, string _name)
+    public static bool Remove<TResource>( this LDTKProject.IResourceContainer _container, string _name )
         where TResource : IResource, new()
     {
         void Remove( IResource? _resource, IMeta? _meta )
         {
-            if (_meta != null)
+            if ( _meta != null )
             {
-                var metaList = _container.GetMetaList(IResource.GetMetaType(typeof(TResource)));
+                var metaList = _container.GetMetaList( IResource.GetMetaType( typeof( TResource ) ) );
                 var index = metaList.IndexOf( _meta );
                 metaList.RemoveAt( index );
-                _container.Cache.RemoveMeta(_meta);
+                _container.Cache.RemoveMeta( _meta );
             }
 
-            if (_resource != null)
+            if ( _resource != null )
             {
-                var resList = _container.GetResourceList(typeof(TResource));
+                var resList = _container.GetResourceList( typeof( TResource ) );
                 var index = resList.IndexOf( _resource );
                 resList.RemoveAt( index );
-                _container.Cache.RemoveResource(_resource);
+                _container.Cache.RemoveResource( _resource );
             }
 
             if ( LogsNeeded( typeof( TResource ) ) )
@@ -401,11 +398,11 @@ public static class IResourceContainerUtilities
 
         if ( _container.Cache.TryGetMeta( key, out var meta ) )
         {
-            Remove(meta.Resource, meta);
+            Remove( meta.Resource, meta );
             return true;
         }
 
-        if (_container.Cache.TryGetResource(key, out var resource))
+        if ( _container.Cache.TryGetResource( key, out var resource ) )
         {
             Remove( resource, resource.Meta );
             return true;
@@ -415,7 +412,7 @@ public static class IResourceContainerUtilities
     }
 
     public static int RemoveDeletedItems<TMeta, TGMResource>( this LDTKProject.IResourceContainer _container, IList<TGMResource> _resource, Func<TGMResource, TMeta?, bool>? _canRemove = null, Func<TGMResource, string>? _getKey = null, Func<TMeta, bool>? _filterMeta = null )
-        where TGMResource: ResourceBase
+        where TGMResource : ResourceBase
         where TMeta : IMeta
     {
         static string GetKeyDefault( TGMResource _res )
@@ -423,7 +420,7 @@ public static class IResourceContainerUtilities
             return _res.name;
         }
 
-        if (_getKey == null)
+        if ( _getKey == null )
             _getKey = GetKeyDefault;
 
         IList<TMeta> metaList;
@@ -436,24 +433,24 @@ public static class IResourceContainerUtilities
             metaList = Array.Empty<TMeta>();
         }
 
-        var knownMeta = metaList.Where( t => _filterMeta == null || _filterMeta(t) ).ToDictionary( t => t.identifier );
+        var knownMeta = metaList.Where( t => _filterMeta == null || _filterMeta( t ) ).ToDictionary( t => t.identifier );
 
         int count = 0;
         for ( int i = _resource.Count - 1; i >= 0; i-- )
         {
             TGMResource res = _resource[i];
-            string key = _getKey(res);
+            string key = _getKey( res );
 
             bool knownByLDTK = knownMeta.TryGetValue( key, out TMeta? meta );
             // There may be meta without
-            if (knownByLDTK && meta!.Resource != null)
+            if ( knownByLDTK && meta!.Resource != null )
                 continue;
 
-            if (_canRemove != null && !_canRemove(res, meta))
+            if ( _canRemove != null && !_canRemove( res, meta ) )
                 continue;
 
-            if (meta != null)
-                metaList.Remove(meta);
+            if ( meta != null )
+                metaList.Remove( meta );
             _resource.RemoveAt( i );
             count++;
             AnsiConsole.MarkupLineInterpolated( $"Removed resource {key} of type [green]{typeof( TGMResource ).Name}[/]" );
