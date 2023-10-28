@@ -9,7 +9,7 @@ namespace LDTK2GMS2Pipeline.Sync;
 
 internal static class GM2LDTK
 {
-    public static async Task ImportToLDTK( GMProject _gmProject, LDTKProject _ldtkProject )
+    public static async Task ImportToLDTK( GMProject _gmProject, LDTKProject _ldtkProject, bool _forceUpdateAtlas )
     {
         var levelObjects = _gmProject
             .GetResourcesByType<GMObject>()
@@ -33,8 +33,8 @@ internal static class GM2LDTK
 
         Tileset tileset = GetAtlasTileset( _ldtkProject, atlasUpdated, atlas );
 
-        if ( atlasUpdated )
-            UpdateAtlasReferences( _ldtkProject, atlas, tileset );
+        if ( atlasUpdated || _forceUpdateAtlas )
+            UpdateAtlasReferences( _ldtkProject, _gmProject, atlas, tileset, _forceUpdateAtlas );
 
         AnsiConsole.Write( new Rule( "ENTITIES" ) );
 
@@ -87,6 +87,16 @@ internal static class GM2LDTK
 
         var flipEnum = SharedData.GetFlipEnum( _project );
 
+        foreach (var pair in _project.EnumeratePairedResources<Level.MetaData, GMRoom>( _rooms ) )
+        {
+            if (pair.res == null && pair.meta != null)
+            {
+                if (pair.meta.Resource != null)
+                    AnsiConsole.MarkupLineInterpolated( $"[yellow]Level {pair.meta.identifier} was deleted because it was removed from the GM.[/]" );
+                _project.Remove<Level>(pair.meta.identifier);
+            }
+        }
+
         foreach ( GMRoom room in _rooms )
         {
             //if ( room.name != "rm_combat_test" )
@@ -130,8 +140,15 @@ internal static class GM2LDTK
                 }
 
                 var gmLayer = gmLayers.Find( t => t.name == layerDef.identifier );
-                if ( gmLayer == null )
+                if (gmLayer == null)
+                {
+                    // Cleanup layer if there is no matching one in GM
+                    layer.autoLayerTiles.Clear();
+                    layer.entityInstances.Clear();
+                    layer.gridTiles.Clear();
+                    layer.visible = false;
                     continue;
+                }
 
                 if ( !Layer.CanBeConverted( gmLayer, layerDef.__type ) )
                 {
@@ -215,8 +232,11 @@ internal static class GM2LDTK
 
                             foreach ( GMOverriddenProperty propOverride in gmInstance.properties )
                             {
-                                if ( !GetField( propOverride.varName, out Field.MetaData fieldMeta ) )
+                                if (!GetField(propOverride.varName, out Field.MetaData fieldMeta) || _project.Options.IsPropertyIgnored( propOverride.objectId, propOverride.propertyId ) )
+                                {
+                                    instance.Remove<Level.FieldInstance>( propOverride.varName, true );
                                     continue;
+                                }
 
                                 if ( !ConvertDefaultValue( propOverride.propertyId, propOverride.value, out var result, fieldMeta.type ) )
                                 {
@@ -311,20 +331,37 @@ internal static class GM2LDTK
         return tileset;
     }
 
-    private static void UpdateAtlasReferences( LDTKProject _ldtkProject, SpriteAtlas _atlas, Tileset _atlasTileset )
+    private static void UpdateAtlasReferences( LDTKProject _ldtkProject, GMProject _gmProject, SpriteAtlas _atlas, Tileset _atlasTileset, bool _forceUpdate = false )
     {
         foreach ( Entity entity in _ldtkProject.defs.entities )
         {
             if ( entity.tilesetId != _atlasTileset.uid || entity.tileRect == null )
                 continue;
 
-            var currentRect = new Rectangle( entity.tileRect.x, entity.tileRect.y, entity.tileRect.w, entity.tileRect.h );
+            dynamic rect;
 
-            Rectangle? newRect = _atlas.UpdatePosition( currentRect );
-            if ( newRect == null )
+            if (!_forceUpdate)
+            {
+                var currentRect = new Rectangle(entity.tileRect.x, entity.tileRect.y, entity.tileRect.w,
+                    entity.tileRect.h);
+
+                Rectangle? newRect = _atlas.UpdatePosition(currentRect);
+                if (newRect != null)
+                {
+                    rect = newRect.Value;
+                    goto found;
+                }
+            }
+
+            var spriteName = (_gmProject.FindResourceByName( entity.Meta?.identifier, typeof( GMObject ) ) as GMObject)?.spriteId?.name;
+            SpriteAtlas.IAtlasItem? atlasItem = _atlas.Get( spriteName );
+            if ( atlasItem == null )
                 continue;
 
-            var rect = newRect.Value;
+            rect = atlasItem.Rectangle;
+
+        found:
+
             entity.tileRect = new TileRect()
             {
                 tilesetUid = _atlasTileset.uid,

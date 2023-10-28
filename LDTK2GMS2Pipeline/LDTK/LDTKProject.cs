@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using LDTK2GMS2Pipeline.Sync;
 using LDTK2GMS2Pipeline.Utilities;
 
 namespace LDTK2GMS2Pipeline.LDTK;
@@ -34,6 +35,9 @@ public partial class LDTKProject : LDTKProject.IResourceContainer
     [JsonIgnore]
     public FileInfo MetaPath { get; private set; } = null!;
 
+    [JsonIgnore]
+    public Options Options { get; private set; } = new ();
+
     public string ProjectDirectory => ProjectPath.DirectoryName!;
 
     ResourceCache IResourceContainer.Cache { get; } = new();
@@ -55,6 +59,8 @@ public partial class LDTKProject : LDTKProject.IResourceContainer
 
         data.ProjectPath = _file;
         data.MetaPath = new FileInfo( Path.ChangeExtension( _file.FullName, ".meta" ) );
+
+        data.Options = await Sync.Options.Load(_file.FullName);
 
         for ( int i = 0; i < data.levels.Count; i++ )
         {
@@ -126,6 +132,8 @@ public partial class LDTKProject : LDTKProject.IResourceContainer
         await File.WriteAllTextAsync( savePath, mergedJson );
 
         await SaveMeta(savePath);
+
+        await Options.Save(savePath);
     }
 
     public Task SaveMeta()

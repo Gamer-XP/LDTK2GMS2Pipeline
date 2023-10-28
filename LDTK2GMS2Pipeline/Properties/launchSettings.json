@@ -16,7 +16,13 @@
     },
     "Youki Export": {
       "commandName": "Project",
-      "commandLineArgs": "--export",
+      "commandLineArgs": "--mode Export",
+      "workingDirectory": "E:\\Work\\GMS2\\Youki\\working_files\\ldtk",
+      "hotReloadEnabled": false
+    },
+    "Youki Resize": {
+      "commandName": "Project",
+      "commandLineArgs": "--mode ResizeTileset",
       "workingDirectory": "E:\\Work\\GMS2\\Youki\\working_files\\ldtk",
       "hotReloadEnabled": false
     }

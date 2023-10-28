@@ -17,8 +17,6 @@ internal class LDTK2GM
         {
             ExportLevel( _gmProject, _ldtkProject, level );
         }
-
-        await _ldtkProject.SaveMeta();
     }
 
     private static void ExportLevel( GMProject _gmProject, LDTKProject _ldtkProject, LDTKProject.Level _level )
@@ -54,7 +52,7 @@ internal class LDTK2GM
 
         foreach (var layerGroup in _ldtkProject.defs.layers.GroupBy( t => GetTrimmedName(t.identifier) ).Reverse() )
         {
-            List<Level.Layer> filteredLayers = new( 2 );
+            List<(Level.Layer Layer, bool justInitialized) > filteredLayers = new( 2 );
 
             GMRLayer? gmLayer = room.layers.Find(t => GetTrimmedName(t.name) == layerGroup.Key);
 
@@ -103,10 +101,14 @@ internal class LDTK2GM
                     AnsiConsole.MarkupLineInterpolated( $"Added layer [green]{gmLayer.name}[/] to room [teal]{room.name}[/]" );
                 }
 
-                if ( layerData.Meta == null )
-                    _level.CreateMetaFor( layerData, layerDef.identifier );
+                bool justInitialized = false;
+                if (layerData.Meta == null)
+                {
+                    justInitialized = true;
+                    _level.CreateMetaFor(layerData, layerDef.identifier);
+                }
 
-                filteredLayers.Add( layerData );
+                filteredLayers.Add( (layerData, justInitialized) );
             }
 
             if ( filteredLayers.Count == 0)
@@ -116,7 +118,7 @@ internal class LDTK2GM
             switch ( gmLayer )
             {
                 case GMRInstanceLayer instanceLayer:
-                    ExportEntities( instanceLayer, filteredLayers.First() );
+                    ExportEntities( instanceLayer, filteredLayers[0].Layer, filteredLayers[0].justInitialized );
                     break;
                 case GMRTileLayer tileLayer:
                     ExportTiles( tileLayer, filteredLayers );
@@ -124,7 +126,7 @@ internal class LDTK2GM
             }
         }
 
-        void ExportEntities( GMRInstanceLayer _instanceLayer, LDTKProject.Level.Layer _layer )
+        void ExportEntities( GMRInstanceLayer _instanceLayer, LDTKProject.Level.Layer _layer, bool _justInitialized )
         {
             bool FindObject( int _entityUid, out LDTKProject.Entity _entity, out GMObject _gmObject )
             {
@@ -150,7 +152,24 @@ internal class LDTK2GM
 
             var existing = _instanceLayer.instances.ToDictionary( t => t.name );
 
-            _layer.RemoveDeletedItems<Level.EntityInstance.MetaData, GMRInstance>( _instanceLayer.instances, ( _instance, _ ) => !_instance.ignore && knownObjects.Contains( _instance.objectId.name ) );
+            if (!_justInitialized )
+                foreach (var pair in _layer.EnumeratePairedResources<Level.EntityInstance.MetaData, GMRInstance>(_instanceLayer.instances))
+                {
+                    if (pair.res == null)
+                        continue;
+
+                    bool isIgnored = pair.res.ignore || !knownObjects.Contains(pair.res.objectId.name);
+                    if (isIgnored)
+                        continue;
+
+                    bool shouldRemove = pair.meta == null || pair.meta.Resource == null;
+                    if (shouldRemove)
+                    {
+                        AnsiConsole.MarkupLineInterpolated($"Removed [teal]{pair.res.objectId.name}[/] from [olive]{room.name}[/]");
+                        _instanceLayer.instances.Remove( pair.res );
+                        _layer.Remove<Level.EntityInstance>( pair.res.name);
+                    }
+                }
 
             foreach ( LDTKProject.Level.EntityInstance instance in _layer.entityInstances )
             {
@@ -172,7 +191,7 @@ internal class LDTK2GM
                         objectId = obj
                     };
                     _gmProject.AddResource( gmInstance );
-                    AnsiConsole.MarkupLineInterpolated( $"Added instance [underline]{gmInstance.name}[/] [teal][[{obj.name}]][/] on layer {_instanceLayer.name}" );
+                    AnsiConsole.MarkupLineInterpolated( $"Added [teal]{obj.name}[/] to [olive]{room.name}[/]" );
 
                     _instanceLayer.instances.Add( gmInstance );
                 }
@@ -183,16 +202,29 @@ internal class LDTK2GM
                 float scaleX = instance.width / (float) entityType.width;
                 float scaleY = instance.height / (float) entityType.height;
 
+                bool gotFlipProperty = false;
                 bool flipX = false, flipY = false;
 
                 var sourceProperties = gmInstance.properties.ToDictionary( t => t.varName );
 
-                int count = instance.RemoveDeletedItems<Level.FieldInstance.MetaData, GMOverriddenProperty>( gmInstance.properties,
-                    ( _, m ) => m == null || !m.GotError,
-                    t => t.varName,
-                    t => t.Resource == null || t.Resource.IsOverridden || t.GotError );
-                if ( count > 0 )
-                    Console.WriteLine( $"Removed {count} from {gmInstance.objectId.name}" );
+                foreach (var data in instance.EnumeratePairedResources<Level.FieldInstance.MetaData, GMOverriddenProperty>( gmInstance.properties, _property => _property.varName ))
+                {
+                    if ( data.res == null)
+                        continue;
+
+                    bool shouldRemove;
+                    var fieldMeta = entityType.GetMeta<Field.MetaData>(data.res.varName);
+                    if (fieldMeta == null)
+                        shouldRemove = false;
+                    else
+                        shouldRemove = fieldMeta.Resource != null && ( data.meta == null || (data.meta.Resource == null && !data.meta.GotError));
+
+                    if (shouldRemove)
+                    {
+                        AnsiConsole.MarkupLineInterpolated( $"Removed [underline]{data.res.varName}[/] override from [olive]{gmInstance.name}[/] [[{gmInstance.objectId.name}]] in [teal]{room.name}[/]" );
+                        gmInstance.properties.Remove(data.res);
+                    }
+                }
 
                 foreach ( LDTKProject.Level.FieldInstance fieldInstance in instance.fieldInstances )
                 {
@@ -208,6 +240,7 @@ internal class LDTK2GM
 
                     if ( fieldDef.Meta.identifier == SharedData.FlipStateEnumName )
                     {
+                        gotFlipProperty = true;
                         int index = SharedData.FlipProperty.listItems.IndexOf( fieldInstance.__value?.ToString() );
                         if ( index < 0 )
                             continue;
@@ -227,6 +260,7 @@ internal class LDTK2GM
 
                         value = new GMOverriddenProperty( field.Property, field.DefinedIn, gmInstance );
                         gmInstance.properties.Add( value );
+                        AnsiConsole.MarkupLineInterpolated( $"Added field override [green]{value.varName}[/] in [teal]{gmInstance.objectId.name}[/] to [olive]{room.name}[/]" );
                     }
 
                     if ( fieldInstance.Meta == null )
@@ -235,6 +269,12 @@ internal class LDTK2GM
                         fieldInstance.Meta.GotError = false;
 
                     value.value = fieldDef.Meta.LDTK2GM( fieldInstance.__value );
+                }
+
+                if (!gotFlipProperty)
+                {
+                    flipX = gmInstance.flipX;
+                    flipY = gmInstance.flipY;
                 }
 
                 if ( flipX )
@@ -249,16 +289,20 @@ internal class LDTK2GM
             }
         }
 
-        void ExportTiles( GMRTileLayer _tileLayer, IList<LDTKProject.Level.Layer> _layers )
+        void ExportTiles( GMRTileLayer _tileLayer, IList<(Level.Layer layer, bool justInitialized)> _layersWithExtraData )
         {
-            var usedTileset = _layers.Select( t => t.__tilesetDefUid ).FirstOrDefault( t => t != null );
+            IList<Level.Layer> layers = _layersWithExtraData.Where( t => !t.justInitialized).Select( t => t.layer).ToList();
+            if ( layers.Count == 0)
+                return;
+
+            var usedTileset = layers.Select( t => t.__tilesetDefUid ).FirstOrDefault( t => t != null );
             if ( usedTileset == null )
             {
                 _tileLayer.tilesetId = null;
                 return;
             }
 
-            if ( _layers.Count > 1 && !_layers.All( t => t.__tilesetDefUid == null || t.__tilesetDefUid == usedTileset ) )
+            if ( layers.Count > 1 && !layers.All( t => t.__tilesetDefUid == null || t.__tilesetDefUid == usedTileset ) )
             {
                 AnsiConsole.MarkupLineInterpolated( $"[red]Layers of group [underline]{_tileLayer.name}[/] in [teal]{_level.identifier}[/] use different tilesets. This is not supported.[/]" );
                 return;
@@ -277,9 +321,9 @@ internal class LDTK2GM
                 return;
             }
 
-            var mainLayer = _layers.First();
+            var mainLayer = layers.First();
 
-            if (_layers.Count > 0 && !_layers.All(t =>
+            if (layers.Count > 0 && !layers.All(t =>
                     t.pxOffsetX == mainLayer.pxOffsetX && t.pxOffsetY == mainLayer.pxOffsetY &&
                     t.__cWid == mainLayer.__cWid && t.__cHei == mainLayer.__cHei))
             {
@@ -293,7 +337,7 @@ internal class LDTK2GM
 
             var gmTilesetWidth = (gmTileset.spriteId.width - gmTileset.tilexoff + gmTileset.tilehsep) / (gmTileset.tileWidth + gmTileset.tilehsep);
 
-            foreach (Level.Layer layer in _layers.Reverse())
+            foreach (Level.Layer layer in layers.Reverse())
             {
                 if ( layer.__tilesetDefUid == null)
                     continue;

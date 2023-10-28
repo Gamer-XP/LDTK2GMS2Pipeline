@@ -137,6 +137,13 @@ public static class GMProjectUtilities
         IsDirtyPropSetter.Invoke(_resource, isDirtySetterParams);
     }
 
+    public static void ResetDirtyAll(GMProject _project)
+    {
+        ResetDirty( _project );
+        foreach ( var resource in _project.resources.Select( t => t.id ) )
+            ResetDirty( resource );
+    }
+
     class PlaceholderLicensingModule : ILicenseModulesSource
     {
         public IEnumerable<string> Modules { get; } = new List<string>();

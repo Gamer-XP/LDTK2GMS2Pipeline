@@ -38,6 +38,8 @@ public partial class LDTKProject
 
             type = null;
             needValidation = false;
+
+            Dictionary<string, Value> originals = values.ToDictionary(t => t.id!);
             values = _property.listItems.Select( _t => new Value() { id = _t } ).ToList();
             bool isEnum = values.Any( t => t.id.Contains( '.' ) );
             if ( isEnum )
@@ -57,6 +59,17 @@ public partial class LDTKProject
                 bool isString = values.All( t => t.id.StartsWith( '"' ) && t.id.EndsWith( '"' ) );
                 if ( isString )
                     type = Field.MetaData.StringPropertyType;
+            }
+
+            values.ForEach( t => t.id = Field.MetaData.GM2LDTK( t.id, type ) );
+
+            foreach (Value value in values)
+            {
+                if (originals.TryGetValue(value.id!, out var previous))
+                {
+                    value.color = previous.color;
+                    value.tileRect = previous.tileRect;
+                }
             }
 
             return type;

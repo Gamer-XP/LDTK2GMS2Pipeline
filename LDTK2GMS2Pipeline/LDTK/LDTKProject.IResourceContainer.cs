@@ -369,13 +369,16 @@ public static class IResourceContainerUtilities
         return true;
     }
 
-    public static bool Remove<TResource>( this LDTKProject.IResourceContainer _container, string _name )
+    public static bool Remove<TResource>( this LDTKProject.IResourceContainer _container, string _name, bool _keepMeta = false )
         where TResource : IResource, new()
     {
         void Remove( IResource? _resource, IMeta? _meta )
         {
-            if ( _meta != null )
+            bool deletedAny = false;
+
+            if ( _meta != null && !_keepMeta )
             {
+                deletedAny = true;
                 var metaList = _container.GetMetaList( IResource.GetMetaType( typeof( TResource ) ) );
                 var index = metaList.IndexOf( _meta );
                 metaList.RemoveAt( index );
@@ -384,13 +387,14 @@ public static class IResourceContainerUtilities
 
             if ( _resource != null )
             {
+                deletedAny = true;
                 var resList = _container.GetResourceList( typeof( TResource ) );
                 var index = resList.IndexOf( _resource );
                 resList.RemoveAt( index );
                 _container.Cache.RemoveResource( _resource );
             }
 
-            if ( LogsNeeded( typeof( TResource ) ) )
+            if ( deletedAny && LogsNeeded( typeof( TResource ) ) )
                 AnsiConsole.MarkupLineInterpolated( $"Deleted {typeof( TResource ).Name} [teal]{_resource?.identifier ?? _meta?.identifier ?? "???"}[/]" );
         }
 
@@ -411,7 +415,11 @@ public static class IResourceContainerUtilities
         return false;
     }
 
-    public static int RemoveDeletedItems<TMeta, TGMResource>( this LDTKProject.IResourceContainer _container, IList<TGMResource> _resource, Func<TGMResource, TMeta?, bool>? _canRemove = null, Func<TGMResource, string>? _getKey = null, Func<TMeta, bool>? _filterMeta = null )
+    /// <summary>
+    /// Enumerates pairs of meta and resource, matching by their key.
+    /// Either resource or meta may be missing, never both.
+    /// </summary>
+    public static IEnumerable<(TMeta? meta, TGMResource? res)> EnumeratePairedResources<TMeta, TGMResource>( this LDTKProject.IResourceContainer _container, IList<TGMResource> _resource, Func<TGMResource, string>? _getKey = null )
         where TGMResource : ResourceBase
         where TMeta : IMeta
     {
@@ -430,33 +438,25 @@ public static class IResourceContainerUtilities
         }
         catch ( Exception )
         {
-            metaList = Array.Empty<TMeta>();
+            yield break;
         }
 
-        var knownMeta = metaList.Where( t => _filterMeta == null || _filterMeta( t ) ).ToDictionary( t => t.identifier );
+        var knownMeta = metaList.ToDictionary( t => t.identifier );
 
-        int count = 0;
         for ( int i = _resource.Count - 1; i >= 0; i-- )
         {
             TGMResource res = _resource[i];
             string key = _getKey( res );
 
-            bool knownByLDTK = knownMeta.TryGetValue( key, out TMeta? meta );
-            // There may be meta without
-            if ( knownByLDTK && meta!.Resource != null )
-                continue;
-
-            if ( _canRemove != null && !_canRemove( res, meta ) )
-                continue;
-
-            if ( meta != null )
-                metaList.Remove( meta );
-            _resource.RemoveAt( i );
-            count++;
-            AnsiConsole.MarkupLineInterpolated( $"Removed resource {key} of type [green]{typeof( TGMResource ).Name}[/]" );
+            if (knownMeta.TryGetValue(key, out TMeta? meta))
+                knownMeta.Remove(key);
+            yield return (meta, res);
         }
 
-        return count;
+        foreach (var meta in knownMeta.Values)
+        {
+            yield return (meta, null);
+        }
     }
 
     public static T? GetMeta<T>( this LDTKProject.IResourceContainer _container, string _name )

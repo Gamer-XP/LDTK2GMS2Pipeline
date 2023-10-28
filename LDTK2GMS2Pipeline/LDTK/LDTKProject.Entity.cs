@@ -235,7 +235,10 @@ public partial class LDTKProject
 
         foreach ( var propertyInfo in definedProperties )
         {
-            UpdateField( propertyInfo );
+            if (!Options.IsPropertyIgnored(propertyInfo.DefinedIn, propertyInfo.Property))
+                UpdateField( propertyInfo );
+            else
+                RemoveProperty(propertyInfo);
         }
 
         void RemoveMissingProperties( IEnumerable<GMObjectProperty> _properties )
@@ -262,7 +265,6 @@ public partial class LDTKProject
             if ( _info.Property.varType == eObjectPropertyType.List )
             {
                 InitializeListProperty( _info, out LDTKProject.Enum en, out type );
-                en.values.ForEach( t => t.id = Field.MetaData.GM2LDTK( t.id, type ) );
 
                 fieldType.__type = string.Format( fieldType.__type, en.identifier );
                 fieldType.type = string.Format( fieldType.type, en.uid );
@@ -313,6 +315,11 @@ public partial class LDTKProject
 
             field.Meta.type = type;
             field.Meta.gotError = !convertSuccess;
+        }
+
+        void RemoveProperty( GMObjectPropertyInfo _info  )
+        {
+            _entity.Remove<Field>(_info.Property.varName, true);
         }
 
         void InitializeListProperty( GMObjectPropertyInfo _info, out LDTKProject.Enum _enum, out string? _valueType )
