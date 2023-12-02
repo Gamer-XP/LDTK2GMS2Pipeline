@@ -7,6 +7,8 @@ using System.Reflection;
 using LDTK2GMS2Pipeline.Sync;
 using Microsoft.VisualBasic.FileIO;
 using LDTK2GMS2Pipeline.Utilities;
+using static LDTK2GMS2Pipeline.LDTK.LDTKProject.Level;
+using System.Text.Json;
 
 namespace LDTK2GMS2Pipeline.LDTK;
 
@@ -73,15 +75,18 @@ public partial class LDTKProject
                 h = rect.Height
             };
 
-            if ( atlasItem.Sprite.nineSlice?.enabled ?? false )
+            bool use9Slice = _object.spriteId?.nineSlice?.enabled ?? false;
+
+            if ( use9Slice )
             {
                 tileRect.x += rect.PaddingLeft;
                 tileRect.y += rect.PaddingTop;
                 tileRect.w -= rect.PaddingLeft + rect.PaddingRight;
                 tileRect.h -= rect.PaddingTop + rect.PaddingBottom;
+                width = tileRect.w;
+                height = tileRect.h;
             }
 
-            bool use9Slice = _object.spriteId?.nineSlice?.enabled ?? false;
             resizableX = resizableY = use9Slice;
 
             if ( !use9Slice )
@@ -133,46 +138,134 @@ public partial class LDTKProject
 
             public const string StringPropertyType = "$string";
 
-            public string? GM2LDTK( string? _input )
-            {
-                return GM2LDTK( _input, type );
-            }
-
-            public string? LDTK2GM( object? _input )
-            {
-                return LDTK2GM( _input, type );
-            }
-
-            public static string? GM2LDTK( string? _input, string? _type )
+            public static string? GM2LDTK( string? _input, string? _valueType, bool _isEnum )
             {
                 if ( _input == null )
                     return null;
 
-                switch ( _type )
+                _input = _valueType switch
                 {
-                    case null:
-                    case StringPropertyType:
-                        return _input;
-                    default:
-                        if ( !_input.StartsWith( _type ) )
-                            return _input;
-                        return _input.Substring( _type.Length + 1 );
-                }
+                    null => _input,
+                    StringPropertyType => _input.Trim( '"' ),
+                    _ => !_input.StartsWith( _valueType ) ? _input : _input.Substring( _valueType.Length + 1 )
+                };
+
+                if (_isEnum)
+                    return ToValidEnumValue( _input );
+                return _input;
             }
 
-            public static string? LDTK2GM( object? _input, string? _type )
+            public static string? LDTK2GM( LDTKProject _project, object? _input, string? _valueType, Field _ldtkProp, GMObjectProperty _gmProp, Dictionary<string, string> _idMatches )
             {
                 if ( _input == null )
                     return null;
 
-                switch ( _type )
+                string? ConvertValue()
                 {
-                    case null:
-                    case StringPropertyType:
-                        return _input.ToString();
-                    default:
-                        return $"{_type}.{_input.ToString()}";
+                    if (_ldtkProp.isArray)
+                    {
+                        throw new NotSupportedException();
+                    }
+
+                    if (_ldtkProp.__type == "Point")
+                    {
+                        switch ( _gmProp.varType)
+                        {
+                            case eObjectPropertyType.Expression:
+                            case eObjectPropertyType.String:
+                                break;
+                            default:
+                                throw new NotSupportedException();
+                        }
+
+                        return null;
+                    }
+
+                    if ( _ldtkProp.__type == "EntityRef" )
+                    {
+                        switch ( _gmProp.varType )
+                        {
+                            case eObjectPropertyType.Expression:
+                            case eObjectPropertyType.String:
+                                break;
+                            default:
+                                throw new NotSupportedException();
+                        }
+
+                        if ( _input is JsonElement elem )
+                        {
+                            return elem.GetProperty( "entityIid" ).GetString();
+                        }
+
+                        return null;
+                    }
+
+                    if ( _ldtkProp.__type.StartsWith( "LocalEnum." ) )
+                    {
+                        var enumName = _ldtkProp.__type.Substring( "LocalEnum.".Length );
+                        var enumType = _project.defs.enums.Find( t => t.identifier == enumName );
+                        if ( enumType == null )
+                            return null;
+
+                        var inputString = _input.ToString();
+                        int valueIndex = enumType.values.FindIndex( t => t.id == inputString );
+
+                        switch ( _gmProp.varType )
+                        {
+                            case eObjectPropertyType.Real:
+                            case eObjectPropertyType.Integer:
+                                return valueIndex.ToString();
+                            case eObjectPropertyType.Boolean:
+                                return valueIndex > 0 ? "true" : "false";
+                            case eObjectPropertyType.Color:
+                                throw new NotSupportedException();
+                                //return valueIndex >= 0 ? enumType.values[valueIndex].color.ToString() : "";
+                        }
+
+                        return (uint) valueIndex < _gmProp.listItems.Count
+                            ? _gmProp.listItems[valueIndex]
+                            : "";
+                    }
+
+                    return null;
                 }
+
+                string? result = null;
+
+                try
+                {
+                    result = ConvertValue();
+                }
+                catch ( NotSupportedException )
+                {
+                    AnsiConsole.MarkupLineInterpolated( $"[red]Unable to convert value {_input} from {_ldtkProp.type} to {_gmProp.varType}[/]" );
+                }
+                catch ( Exception )
+                {
+                    // ignored
+                }
+
+                if (result == null)
+                {
+                    result = _input.ToString();
+
+                    switch (_valueType)
+                    {
+                        case null:
+                            break;
+                        case StringPropertyType:
+                            result = $"\"{result}\"";
+                            break;
+                        default:
+                            result = $"{_valueType}.{result}";
+                            break;
+                    }
+                }
+
+                if ( result != null && _idMatches.TryGetValue( result, out var entityReference ) )
+                    result = entityReference;
+
+                return result;
             }
         }
 
@@ -216,6 +309,7 @@ public partial class LDTKProject
     public static IEnumerable<GMObjectPropertyInfo> EnumerateAllProperties( GMObject _object )
     {
         yield return new GMObjectPropertyInfo( SharedData.FlipProperty, _object );
+        yield return new GMObjectPropertyInfo( SharedData.ImageIndexProperty, _object );
 
         foreach ( GMObjectPropertyInfo info in GMProjectUtilities.EnumerateAllProperties( _object ) )
         {
@@ -258,25 +352,24 @@ public partial class LDTKProject
                 return;
             }
 
+            bool isOptional = _info.Property == SharedData.ImageIndexProperty;
+
             string? type = null;
 
             var fieldType = GM2LDTKField( _info.Property );
 
-            if ( _info.Property.varType == eObjectPropertyType.List )
+            bool isEnum = _info.Property.varType == eObjectPropertyType.List;
+            if ( isEnum )
             {
                 InitializeListProperty( _info, out LDTKProject.Enum en, out type );
 
                 fieldType.__type = string.Format( fieldType.__type, en.identifier );
                 fieldType.type = string.Format( fieldType.type, en.uid );
             }
-            else if ( _info.Property.varType == eObjectPropertyType.String )
-            {
-                type = Field.MetaData.StringPropertyType;
-            }
 
             string defaultValue = GetDefaultValue( _object, _info.Property );
 
-            bool convertSuccess = ConvertDefaultValue( _info.Property, defaultValue, out DefaultOverride defaultValueJson, type );
+            bool convertSuccess = ConvertDefaultValue( _info.Property, defaultValue, out DefaultOverride defaultValueJson, type, isEnum );
 
             if ( !convertSuccess && !loggedErrorsFor.Contains( _info ) )
             {
@@ -284,7 +377,18 @@ public partial class LDTKProject
                 loggedErrorsFor.Add( _info );
             }
 
-            bool justCreated = _entity.CreateOrExisting<Field>(_info.Property.varName, out var field);
+            bool justCreated;
+            Field? field;
+            if (!isOptional)
+                justCreated = _entity.CreateOrExisting<Field>(_info.Property.varName, out field);
+            else
+            {
+                field = _entity.GetResource<Field>(_info.Property.varName);
+                if ( field != null && field.Meta == null)
+                    _entity.CreateMetaFor(field, _info.Property.varName );
+                justCreated = false;
+            }
+
             if ( field == null)
                 return;
 
@@ -385,12 +489,15 @@ public partial class LDTKProject
         return string.Concat( pascalCase );
     }
 
-    public static bool ConvertDefaultValue( GMObjectProperty _property, string _value, out DefaultOverride _result, string? _type = null )
+    public static bool ConvertDefaultValue( GMObjectProperty _property, string _value, out DefaultOverride _result, string? _type = null, bool _isEnum = false, Dictionary<string, string>? _idConverter = null )
     {
         try
         {
             if ( _type != null )
-                _value = Field.MetaData.GM2LDTK( _value, _type );
+                _value = Field.MetaData.GM2LDTK( _value, _type, _isEnum );
+
+            if (_value != null && _idConverter != null && _idConverter.TryGetValue(_value, out var otherId))
+                _value = otherId;
 
             switch ( _property.varType )
             {

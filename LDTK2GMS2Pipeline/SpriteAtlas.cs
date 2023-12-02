@@ -20,6 +20,8 @@ public class SpriteAtlas
 
     private DateTime? lastAtlasUpdateTime;
 
+    public bool IsNew => lastAtlasUpdateTime == null;
+
     private Dictionary<string, AtlasItem> items = new();
 
     public interface IAtlasItem
@@ -35,6 +37,7 @@ public class SpriteAtlas
         public Image<Rgba32>? AtlasImage { get; set; }
         public AtlasRectangle? PreviousRectangle { get; set; } = null;
         public AtlasRectangle Rectangle { get; set; } = new();
+        public bool NoCropping => Sprite.nineSlice?.enabled ?? false;
         public bool IsModified = false;
         public FileInfo ImagePath { get; }
 
@@ -170,6 +173,8 @@ public class SpriteAtlas
         await atlas.SaveAsync( imageFile.FullName );
         await SaveMeta();
 
+        Console.WriteLine( "Atlas updated." );
+
         return true;
     }
 
@@ -255,7 +260,7 @@ public class SpriteAtlas
 
             var atlasRect = pair.Value;
             info.PreviousRectangle = atlasRect;
-            info.Rectangle = atlasRect;
+            info.Rectangle = (AtlasRectangle) atlasRect.Clone();
         }
     }
 
@@ -278,7 +283,7 @@ public class SpriteAtlas
 
             var atlasRect = pair.Value;
             info.PreviousRectangle = atlasRect;
-            info.Rectangle = atlasRect;
+            info.Rectangle = (AtlasRectangle) atlasRect.Clone();
             info.AtlasImage = atlas.Clone( t => t.Crop( new Rectangle( atlasRect.X, atlasRect.Y, atlasRect.Width, atlasRect.Height ) ) );
         }
     }
@@ -300,6 +305,12 @@ public class SpriteAtlas
         int width, height;
 
         // Use small centered sprites as is
+        if (_item.NoCropping)
+        {
+            width = sprite.width;
+            height = sprite.height;
+        }
+        else
         if ( sprite.width <= cellSize && sprite.height <= cellSize && sprite.xorigin == sprite.width / 2 && sprite.yorigin == sprite.height / 2 )
         {
             width = cellSize;
@@ -317,11 +328,14 @@ public class SpriteAtlas
         }
 
 
-        int maxSize = Math.Max( width, height );
-        if ( maxSize <= cellSize * 8 )
+        if (!_item.NoCropping)
         {
-            width = maxSize;
-            height = maxSize;
+            int maxSize = Math.Max(width, height);
+            if (maxSize <= cellSize * 8)
+            {
+                width = maxSize;
+                height = maxSize;
+            }
         }
 
         int trimRectPivotX = (int) (width * relativePivot.X);
@@ -350,8 +364,6 @@ public class SpriteAtlas
         rectangle.PaddingBottom = height - putY - trimRect.Height - sprite.height + trimRect.Bottom;
         rectangle.PivotX = relativePivot.X;
         rectangle.PivotY = relativePivot.Y;
-
-        //await spriteImage.SaveAsPngAsync($"{imageFile.DirectoryName}/{_sprite.Name}.png");
 
         return (spriteImage, rectangle);
     }
@@ -426,7 +438,7 @@ public class SpriteAtlas
     }
 
     [System.Serializable]
-    public class AtlasRectangle : IEquatable<AtlasRectangle>
+    public class AtlasRectangle : IEquatable<AtlasRectangle>, ICloneable
     {
         public int X { get; set; }
         public int Y { get; set; }
@@ -541,6 +553,26 @@ public class SpriteAtlas
             hashCode.Add( Width );
             hashCode.Add( Height );
             return hashCode.ToHashCode();
+        }
+
+        public override string ToString()
+        {
+            return $"{{x:{X}, y:{Y}, w:{Width}, h:{Height}}}";
+        }
+
+        public object Clone()
+        {
+            return new AtlasRectangle()
+            {
+                X = X,
+                Y = Y,
+                Width = Width,
+                Height = Height,
+                PivotX = PivotX,
+                PivotY = PivotY,
+                Padding = (int[]) Padding.Clone(),
+                Empty = (int[]) Empty.Clone()
+            };
         }
     }
 }

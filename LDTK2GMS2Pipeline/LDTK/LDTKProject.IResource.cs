@@ -39,7 +39,7 @@ public partial class LDTKProject
         IResource? IMeta.Resource
         {
             get => Resource;
-            set => Resource = (TResource?) value;
+            set => Resource = value is TResource cast? cast : throw new InvalidCastException($"Unable to cast {value} to {typeof(TResource)} for {identifier}");
         }
     }
 

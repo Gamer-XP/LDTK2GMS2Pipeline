@@ -9,13 +9,17 @@ namespace LDTK2GMS2Pipeline.Sync;
 
 internal static class GM2LDTK
 {
-    public static async Task ImportToLDTK( GMProject _gmProject, LDTKProject _ldtkProject, bool _forceUpdateAtlas )
+    private static IEnumerable<GMObject> GetFilteredObjects( GMProject _project )
     {
-        var levelObjects = _gmProject
+        return _project
             .GetResourcesByType<GMObject>()
             .Cast<GMObject>()
-            .Where( t => t.tags.Contains( SharedData.LevelObjectTag ) )
-            .ToList();
+            .Where(t => t.tags.Contains(SharedData.LevelObjectTag));
+    }
+
+    public static async Task ImportToLDTK( GMProject _gmProject, LDTKProject _ldtkProject, bool _forceUpdateAtlas )
+    {
+        var levelObjects = GetFilteredObjects(_gmProject).ToList();
 
         var sprites = levelObjects
             .Where( t => t.spriteId != null )
@@ -28,6 +32,8 @@ internal static class GM2LDTK
         string atlasPath = Path.Combine( _ldtkProject.ProjectPath.DirectoryName!, SharedData.IconFolder, $"{SharedData.EntityAtlasName}.png" );
         SpriteAtlas atlas = new( atlasPath, _ldtkProject.defaultGridSize );
         atlas.Add( sprites );
+
+        _forceUpdateAtlas |= atlas.IsNew;
 
         bool atlasUpdated = await atlas.Update();
 
@@ -42,14 +48,18 @@ internal static class GM2LDTK
 
         AnsiConsole.Write( new Rule( "TILESETS" ) );
 
-        await UpdateTilesets( _ldtkProject, _gmProject.GetResourcesByType<GMTileSet>().Cast<GMTileSet>().ToList() );
+        UpdateTilesets( _ldtkProject, _gmProject.GetResourcesByType<GMTileSet>().Cast<GMTileSet>().ToList() );
 
         AnsiConsole.Write( new Rule( "LEVELS" ) );
 
         UpdateLevels( _gmProject, _ldtkProject, _gmProject.GetResourcesByType<GMRoom>().Cast<GMRoom>().ToList() );
+
+        AnsiConsole.Write( new Rule( "ENUMS" ) );
+
+        UpdateEnums( _ldtkProject, _gmProject );
     }
 
-    private static async Task UpdateTilesets( LDTKProject _project, List<GMTileSet> _tilesets )
+    private static void UpdateTilesets( LDTKProject _project, List<GMTileSet> _tilesets )
     {
         foreach ( GMTileSet gmTileset in _tilesets )
         {
@@ -80,12 +90,32 @@ internal static class GM2LDTK
         }
     }
 
+    private static void UpdateEnums( LDTKProject _ldtkProject, GMProject _gmProject )
+    {
+        void UpdateEnum( string _name, IEnumerable<string> _values, bool _sort = true )
+        {
+            _ldtkProject.CreateOrExisting( _name, out LDTKProject.Enum? en );
+            if ( en != null)
+                en.UpdateValues( _sort? _values.OrderBy( t => t) : _values );
+        }
+
+        UpdateEnum( "AUTO_LAYERS", _ldtkProject.defs.layers.Select( t => t.identifier), false );
+
+        UpdateEnum( "GM_OBJECTS", _gmProject.GetResourcesByType<GMObject>().Select( t => t.name ) );
+
+        UpdateEnum( "GM_ROOMS", _gmProject.GetResourcesByType<GMRoom>().Select( t => t.name ) );
+
+        UpdateEnum( "GM_SOUNDS", _gmProject.GetResourcesByType<GMSound>().Select( t => t.name ) );
+    }
+
     private static void UpdateLevels( GMProject _gmProject, LDTKProject _project, List<GMRoom> _rooms )
     {
         var entityDict = _project.CreateResourceMap<GMObject, Entity>( _gmProject );
         var tilesetDict = _project.CreateResourceMap<GMTileSet, Tileset>( _gmProject );
 
         var flipEnum = SharedData.GetFlipEnum( _project );
+
+        var entityGM2LDTK = MatchEntities();
 
         foreach (var pair in _project.EnumeratePairedResources<Level.MetaData, GMRoom>( _rooms ) )
         {
@@ -99,9 +129,6 @@ internal static class GM2LDTK
 
         foreach ( GMRoom room in _rooms )
         {
-            //if ( room.name != "rm_combat_test" )
-            //    continue;
-
             if ( _project.CreateOrExisting<Level>( room.name, out var level ) )
                 level.worldX = GetMaxX();
             else
@@ -120,24 +147,39 @@ internal static class GM2LDTK
             return _project.levels.Max( t => t.worldX + t.pxWid );
         }
 
-        void UpdateLevel( GMRoom room, Level level )
+        Dictionary<string, string> MatchEntities()
         {
-            level.pxWid = room.roomSettings.Width;
-            level.pxHei = room.roomSettings.Height;
+            Dictionary<string, string> result = new();
+            foreach (var instance in _project.levels.SelectMany( t => t.layerInstances).SelectMany( t => t.entityInstances))
+            {
+                if ( instance.Meta == null)
+                    continue;
 
-            List<GMRLayer>? gmLayers = room.AllLayers();
+                result.Add( instance.Meta.identifier, instance.iid);
+            }
+
+            return result;
+        }
+
+        void UpdateLevel( GMRoom _room, Level _level )
+        {
+            _level.pxWid = _room.roomSettings.Width;
+            _level.pxHei = _room.roomSettings.Height;
+
+            List<GMRLayer>? gmLayers = _room.AllLayers();
             foreach ( Layer layerDef in _project.defs.layers )
             {
-                if ( level.CreateOrExistingForced<Level.Layer>( layerDef.identifier, out var layer ) )
+                if ( _level.CreateOrExistingForced<Level.Layer>( layerDef.identifier, out var layer ) )
                 {
                     layer.__type = layerDef.__type;
                     layer.__gridSize = layerDef.gridSize;
                     layer.seed = Random.Shared.Next( 9999999 );
-                    layer.__cWid = (room.roomSettings.Width + layerDef.gridSize - 1) / layerDef.gridSize;
-                    layer.__cHei = (room.roomSettings.Height + layerDef.gridSize - 1) / layerDef.gridSize;
-                    layer.levelId = level.uid;
+                    layer.levelId = _level.uid;
                     layer.layerDefUid = layerDef.uid;
                 }
+
+                layer.__cWid = (_room.roomSettings.Width + layerDef.gridSize - 1) / layerDef.gridSize;
+                layer.__cHei = (_room.roomSettings.Height + layerDef.gridSize - 1) / layerDef.gridSize;
 
                 var gmLayer = gmLayers.Find( t => t.name == layerDef.identifier );
                 if (gmLayer == null)
@@ -152,7 +194,7 @@ internal static class GM2LDTK
 
                 if ( !Layer.CanBeConverted( gmLayer, layerDef.__type ) )
                 {
-                    AnsiConsole.MarkupLineInterpolated( $"[yellow]Layer types do not match for [green]{layerDef.identifier}[/] in [olive]{room.name}[/]: {gmLayer.GetType().Name} vs {layerDef.__type}[/]" );
+                    AnsiConsole.MarkupLineInterpolated( $"[yellow]Layer types do not match for [green]{layerDef.identifier}[/] in [olive]{_room.name}[/]: {gmLayer.GetType().Name} vs {layerDef.__type}[/]" );
                     continue;
                 }
 
@@ -172,10 +214,10 @@ internal static class GM2LDTK
 
                         foreach ( GMRInstance gmInstance in instLayer.instances )
                         {
-                            if ( gmInstance.ignore || !entityDict.TryGetValue( gmInstance.objectId, out var entityType ) )
+                            if ( gmInstance.ignore || gmInstance.objectId == null || !entityDict.TryGetValue( gmInstance.objectId, out var entityType ) )
                             {
-                                if ( !gmInstance.ignore )
-                                    AnsiConsole.MarkupLineInterpolated( $"[yellow]Unable to find matching object [teal]{gmInstance.objectId.name}[/] for level [olive]{room.name}[/][/]" );
+                                if ( !gmInstance.ignore && gmInstance.objectId != null )
+                                    AnsiConsole.MarkupLineInterpolated( $"[yellow]Unable to find matching object [teal]{gmInstance.objectId.name}[/] for level [olive]{_room.name}[/][/]" );
 
                                 layer.Remove<Level.EntityInstance>( gmInstance.name );
                                 continue;
@@ -213,8 +255,8 @@ internal static class GM2LDTK
                             instance.__tags = entityType.tags;
                             instance.px = new List<int>() { posX, posY };
                             instance.__grid = new List<int>() { posX / layerDef.gridSize, posY / layerDef.gridSize };
-                            instance.__worldX = level.worldX + posX;
-                            instance.__worldY = level.worldY + posY;
+                            instance.__worldX = _level.worldX + posX;
+                            instance.__worldY = _level.worldY + posY;
                             instance.width = width;
                             instance.height = height;
 
@@ -230,6 +272,16 @@ internal static class GM2LDTK
                                 }
                             }
 
+                            if (gmInstance.imageIndex > 0)
+                            {
+                                if ( GetField( SharedData.ImageIndexState, out Field.MetaData fieldMeta ) )
+                                {
+                                    instance.CreateOrExistingForced( fieldMeta.identifier, out Level.FieldInstance fi, fieldMeta.uid );
+
+                                    fi.SetValue( DefaultOverride.IdTypes.V_Int, gmInstance.imageIndex );
+                                }
+                            }
+
                             foreach ( GMOverriddenProperty propOverride in gmInstance.properties )
                             {
                                 if (!GetField(propOverride.varName, out Field.MetaData fieldMeta) || _project.Options.IsPropertyIgnored( propOverride.objectId, propOverride.propertyId ) )
@@ -238,7 +290,7 @@ internal static class GM2LDTK
                                     continue;
                                 }
 
-                                if ( !ConvertDefaultValue( propOverride.propertyId, propOverride.value, out var result, fieldMeta.type ) )
+                                if ( !ConvertDefaultValue( propOverride.propertyId, propOverride.value, out var result, fieldMeta.type, false, entityGM2LDTK ) )
                                 {
                                     AnsiConsole.MarkupLineInterpolated( $"[red]Error processing value '{propOverride.value}' for field [green]{propOverride.varName} [[{propOverride.propertyId.varType}]][/] in [teal]{gmInstance.objectId.name}[/].[/]" );
                                     instance.CreateMetaFor<Level.FieldInstance.MetaData>( fieldMeta.identifier, fieldMeta.Resource!.uid ).GotError = true;
@@ -403,6 +455,7 @@ internal static class GM2LDTK
 
         _ldtkProject.RemoveUnusedMeta<Entity.MetaData>( _objects.Select( t => t.name ), _s =>
         {
+            _ldtkProject.Remove<Entity>(_s.identifier);
             AnsiConsole.MarkupLineInterpolated( $"Object [teal]{_s}[/] no longer exists in the GM project. Removing from meta..." );
         } );
     }

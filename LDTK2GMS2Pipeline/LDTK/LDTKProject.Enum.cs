@@ -4,6 +4,11 @@ namespace LDTK2GMS2Pipeline.LDTK;
 
 public partial class LDTKProject
 {
+    public static string ToValidEnumValue( string _input )
+    {
+        return _input.Replace( ' ', '_' ).Replace( "\"", "" );
+    }
+
     public class Enum : Resource<Enum.MetaData>
     {
         public class MetaData : Meta<Enum> { }
@@ -39,8 +44,15 @@ public partial class LDTKProject
             type = null;
             needValidation = false;
 
-            Dictionary<string, Value> originals = values.ToDictionary(t => t.id!);
-            values = _property.listItems.Select( _t => new Value() { id = _t } ).ToList();
+            UpdateValues( _property.listItems );
+
+            return type;
+        }
+
+        public void UpdateValues( IEnumerable<string> _values )
+        {
+            Dictionary<string, Value> originals = values.ToDictionary( t => t.id! );
+            values = _values.Select( _t => new Value() { id = _t } ).ToList();
             bool isEnum = values.Any( t => t.id.Contains( '.' ) );
             if ( isEnum )
             {
@@ -61,18 +73,16 @@ public partial class LDTKProject
                     type = Field.MetaData.StringPropertyType;
             }
 
-            values.ForEach( t => t.id = Field.MetaData.GM2LDTK( t.id, type ) );
+            values.ForEach( t => t.id =  Field.MetaData.GM2LDTK( t.id, type, true ) );
 
-            foreach (Value value in values)
+            foreach ( Value value in values )
             {
-                if (originals.TryGetValue(value.id!, out var previous))
+                if ( originals.TryGetValue( value.id!, out var previous ) )
                 {
                     value.color = previous.color;
                     value.tileRect = previous.tileRect;
                 }
             }
-
-            return type;
         }
     }
 }

@@ -23,7 +23,7 @@ internal class Program
             ResizeTileset
         }
 
-        [Option( "mode", Default = Modes.Import, HelpText = $"Mode at which application executed. {nameof( Modes.Import )}, {nameof( Modes.Export )}, {nameof( Modes.ResizeTileset )}" )]
+        [Option( "mode", HelpText = $"Mode at which application executed. {nameof( Modes.Import )}, {nameof( Modes.Export )}, {nameof( Modes.ResizeTileset )}" )]
         public Modes Mode { get; set; }
 
         [Option( "reset_sprites", Default = false, HelpText = "Reset entities to reference their original tiles in the atlas. Valid in import mode only." )]

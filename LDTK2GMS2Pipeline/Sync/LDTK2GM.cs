@@ -1,9 +1,11 @@
 ﻿using System.Diagnostics;
+using System.Text.Json;
 using LDTK2GMS2Pipeline.LDTK;
 using LDTK2GMS2Pipeline.Utilities;
 using Spectre.Console;
 using YoYoStudio.Resources;
 using static LDTK2GMS2Pipeline.LDTK.LDTKProject;
+using static LDTK2GMS2Pipeline.LDTK.LDTKProject.Level;
 
 namespace LDTK2GMS2Pipeline.Sync;
 
@@ -13,13 +15,59 @@ internal class LDTK2GM
     {
         ProjectInfo.IsLoading = false;
 
+        var matches = InitializeEntityMatches(_gmProject, _ldtkProject);
+
         foreach ( LDTKProject.Level level in _ldtkProject.levels )
         {
-            ExportLevel( _gmProject, _ldtkProject, level );
+            ExportLevel( _gmProject, _ldtkProject, level, matches );
         }
     }
 
-    private static void ExportLevel( GMProject _gmProject, LDTKProject _ldtkProject, LDTKProject.Level _level )
+    /// <summary>
+    /// Returns dictionary for LDTK -> GM entity instance identifier matches. Will generate a new id if Meta is missing
+    /// </summary>
+    private static Dictionary<string, string> InitializeEntityMatches( GMProject _gmProject, LDTKProject _ldtkProject  )
+    {
+        var objects = _gmProject.GetResourcesByType<GMObject>();
+
+        Dictionary<string, string> result = new();
+
+        foreach ( var layer in _ldtkProject.levels.SelectMany( t => t.layerInstances ) )
+        {
+            foreach (EntityInstance instance in layer.entityInstances)
+            {
+                string id = instance.Meta?.identifier ?? GetRandomInstanceName(_gmProject);
+
+                result.Add(instance.iid, id );
+            }
+        }
+
+        return result;
+    }
+
+    private static bool FindObject( GMProject _gmProject, LDTKProject _ldtkProject, int _entityUid, out LDTKProject.Entity _entity, out GMObject _gmObject )
+    {
+        _entity = default!;
+        _gmObject = default!;
+
+        var entity = _ldtkProject.GetResource<LDTKProject.Entity>( _entityUid );
+        if ( entity == null )
+            return false;
+
+        var gmObjectName = entity.Meta?.identifier;
+        if ( gmObjectName == null )
+            return false;
+
+        var obj = _gmProject.FindResourceByName( gmObjectName, typeof( GMObject ) ) as GMObject;
+        if ( obj == null )
+            return false;
+
+        _gmObject = obj;
+        _entity = entity;
+        return true;
+    }
+
+    private static void ExportLevel( GMProject _gmProject, LDTKProject _ldtkProject, LDTKProject.Level _level, Dictionary<string, string> _entityLDTK2GM )
     {
         HashSet<string> knownObjects = _ldtkProject.GetResourceList<Entity>().Where( t => t.Meta != null ).Select( t => t.identifier ).ToHashSet();
 
@@ -50,16 +98,18 @@ internal class LDTK2GM
             return _name.TrimStart('_');
         }
 
-        foreach (var layerGroup in _ldtkProject.defs.layers.GroupBy( t => GetTrimmedName(t.identifier) ).Reverse() )
+        foreach (var layerGroup in _ldtkProject.defs.layers.GroupBy( t => GetTrimmedName(t.identifier) ) )
         {
-            List<(Level.Layer Layer, bool justInitialized) > filteredLayers = new( 2 );
+            List<(Level.Layer Layer, bool initializingExisting) > filteredLayers = new( 2 );
 
             GMRLayer? gmLayer = room.layers.Find(t => GetTrimmedName(t.name) == layerGroup.Key);
 
-            foreach (Layer layerDef in layerGroup)
+            foreach (var layerDef in layerGroup)
             {
                 var layerData = _level.GetResource<Level.Layer>( layerDef.identifier );
                 Debug.Assert( layerData != null, "layerData != null");
+
+                bool hadLayer = false;
 
                 if ( gmLayer != null )
                 {
@@ -68,6 +118,8 @@ internal class LDTK2GM
                         AnsiConsole.MarkupLineInterpolated( $"[yellow]Layer types do not match for [green]{layerDef.identifier}[/] in [olive]{room.name}[/]: {gmLayer.GetType().Name} vs {layerDef.__type}. Delete it in GM if you want to receive data from it.[/]" );
                         continue;
                     }
+
+                    hadLayer = true;
                 }
                 else
                 {
@@ -101,24 +153,23 @@ internal class LDTK2GM
                     AnsiConsole.MarkupLineInterpolated( $"Added layer [green]{gmLayer.name}[/] to room [teal]{room.name}[/]" );
                 }
 
-                bool justInitialized = false;
+                bool initializingExisting = false;
                 if (layerData.Meta == null)
                 {
-                    justInitialized = true;
+                    initializingExisting = hadLayer;
                     _level.CreateMetaFor(layerData, layerDef.identifier);
                 }
 
-                filteredLayers.Add( (layerData, justInitialized) );
+                filteredLayers.Add( (layerData, initializingExisting) );
             }
 
             if ( filteredLayers.Count == 0)
                 continue;
 
-
             switch ( gmLayer )
             {
                 case GMRInstanceLayer instanceLayer:
-                    ExportEntities( instanceLayer, filteredLayers[0].Layer, filteredLayers[0].justInitialized );
+                    ExportEntities( instanceLayer, filteredLayers[0].Layer, filteredLayers[0].initializingExisting );
                     break;
                 case GMRTileLayer tileLayer:
                     ExportTiles( tileLayer, filteredLayers );
@@ -126,39 +177,20 @@ internal class LDTK2GM
             }
         }
 
-        void ExportEntities( GMRInstanceLayer _instanceLayer, LDTKProject.Level.Layer _layer, bool _justInitialized )
+        ValidateRoomInstances(room);
+        SortLayers(room);
+
+        void ExportEntities( GMRInstanceLayer _instanceLayer, LDTKProject.Level.Layer _layer, bool _initializingExisting )
         {
-            bool FindObject( int _entityUid, out LDTKProject.Entity _entity, out GMObject _gmObject )
-            {
-                _entity = default!;
-                _gmObject = default!;
-
-                var entity = _ldtkProject.GetResource<LDTKProject.Entity>( _entityUid );
-                if ( entity == null )
-                    return false;
-
-                var gmObjectName = entity.Meta?.identifier;
-                if ( gmObjectName == null )
-                    return false;
-
-                var obj = _gmProject.FindResourceByName( gmObjectName, typeof( GMObject ) ) as GMObject;
-                if ( obj == null )
-                    return false;
-
-                _gmObject = obj;
-                _entity = entity;
-                return true;
-            }
-
             var existing = _instanceLayer.instances.ToDictionary( t => t.name );
 
-            if (!_justInitialized )
+            if (!_initializingExisting )
                 foreach (var pair in _layer.EnumeratePairedResources<Level.EntityInstance.MetaData, GMRInstance>(_instanceLayer.instances))
                 {
                     if (pair.res == null)
                         continue;
 
-                    bool isIgnored = pair.res.ignore || !knownObjects.Contains(pair.res.objectId.name);
+                    bool isIgnored = pair.res.ignore || pair.res.objectId == null || !knownObjects.Contains(pair.res.objectId.name);
                     if (isIgnored)
                         continue;
 
@@ -173,7 +205,7 @@ internal class LDTK2GM
 
             foreach ( LDTKProject.Level.EntityInstance instance in _layer.entityInstances )
             {
-                if ( !FindObject( instance.defUid, out var entityType, out var obj ) )
+                if ( !FindObject( _gmProject, _ldtkProject, instance.defUid, out var entityType, out var obj ) )
                     continue;
 
                 GMRInstance? gmInstance = null;
@@ -182,18 +214,23 @@ internal class LDTK2GM
 
                 if ( gmInstance == null )
                 {
-                    if ( instance.Meta == null )
-                        _layer.CreateMetaFor( instance, GetRandomInstanceName( _gmProject ) );
+                    if (instance.Meta == null) 
+                        _layer.CreateMetaFor(instance, _entityLDTK2GM[instance.iid]);
 
                     gmInstance = new GMRInstance
                     {
-                        name = instance.Meta.identifier,
-                        objectId = obj
+                        name = instance.Meta!.identifier,
+                        objectId = obj,
+                        parent = _instanceLayer,
                     };
-                    _gmProject.AddResource( gmInstance );
-                    AnsiConsole.MarkupLineInterpolated( $"Added [teal]{obj.name}[/] to [olive]{room.name}[/]" );
 
+                    gmInstance.parent = _instanceLayer;
+                    gmInstance.Owner = _instanceLayer;
+
+                    gmInstance.AddToProject(_gmProject);
                     _instanceLayer.instances.Add( gmInstance );
+
+                    AnsiConsole.MarkupLineInterpolated( $"Added [teal]{obj.name}[/] to [olive]{room.name}[/]" );
                 }
 
                 int x = instance.px[0];
@@ -204,6 +241,7 @@ internal class LDTK2GM
 
                 bool gotFlipProperty = false;
                 bool flipX = false, flipY = false;
+                int? imageIndex = null;
 
                 var sourceProperties = gmInstance.properties.ToDictionary( t => t.varName );
 
@@ -232,13 +270,15 @@ internal class LDTK2GM
                         continue;
 
                     var fieldDef = entityType.GetResource<LDTKProject.Field>( fieldInstance.defUid );
-                    if ( fieldDef == null || fieldDef.Meta == null )
+                    if ( fieldDef == null )
                     {
                         AnsiConsole.MarkupLineInterpolated( $"[red]Unable to find field definition for [underline]{fieldInstance.__identifier}[/][/]" );
                         continue;
                     }
 
-                    if ( fieldDef.Meta.identifier == SharedData.FlipStateEnumName )
+                    string fieldName = fieldDef.Meta?.identifier ?? fieldDef.identifier;
+
+                    if ( fieldName == SharedData.FlipStateEnumName )
                     {
                         gotFlipProperty = true;
                         int index = SharedData.FlipProperty.listItems.IndexOf( fieldInstance.__value?.ToString() );
@@ -249,13 +289,31 @@ internal class LDTK2GM
                         continue;
                     }
 
-                    if ( !sourceProperties.TryGetValue( fieldDef.Meta.identifier, out var value ) )
+                    if (fieldName == SharedData.ImageIndexState)
                     {
-                        var field = GMProjectUtilities.EnumerateAllProperties( gmInstance.objectId ).FirstOrDefault( t => t.Property.varName == fieldDef.Meta.identifier );
+                        try
+                        {
+                            imageIndex = Convert.ToInt32( fieldInstance.__value );
+                        }
+                        catch (Exception)
+                        {
+                            imageIndex = null;
+                        }
+                        continue;
+                    }
+
+                    if ( !sourceProperties.TryGetValue( fieldName, out var value ) )
+                    {
+                        var field = GMProjectUtilities.EnumerateAllProperties( gmInstance.objectId ).FirstOrDefault( t => t.Property.varName == fieldName );
                         if ( field == null )
                         {
-                            AnsiConsole.MarkupLineInterpolated( $"[red]There is no field with name [green]{fieldDef.Meta.identifier}[/] in [teal]{gmInstance.objectId.name}[/][/]" );
+                            AnsiConsole.MarkupLineInterpolated( $"[red]There is no field with name [green]{fieldName}[/] in [teal]{gmInstance.objectId.name}[/][/]" );
                             continue;
+                        }
+
+                        if ( fieldDef.Meta == null )
+                        {
+                            entityType.CreateMetaFor( fieldDef, field.Property.varName );
                         }
 
                         value = new GMOverriddenProperty( field.Property, field.DefinedIn, gmInstance );
@@ -264,11 +322,11 @@ internal class LDTK2GM
                     }
 
                     if ( fieldInstance.Meta == null )
-                        instance.CreateMetaFor( fieldInstance, fieldDef.Meta.identifier );
+                        instance.CreateMetaFor( fieldInstance, fieldName );
                     else
                         fieldInstance.Meta.GotError = false;
 
-                    value.value = fieldDef.Meta.LDTK2GM( fieldInstance.__value );
+                    value.value = Field.MetaData.LDTK2GM( _ldtkProject, fieldInstance.__value, fieldDef.Meta?.type, fieldDef, value.propertyId, _entityLDTK2GM );
                 }
 
                 if (!gotFlipProperty)
@@ -286,12 +344,15 @@ internal class LDTK2GM
                 gmInstance.y = y;
                 gmInstance.scaleX = flipX ? -scaleX : scaleX;
                 gmInstance.scaleY = flipY ? -scaleY : scaleY;
+
+                if (imageIndex != null)
+                    gmInstance.imageIndex = imageIndex.Value;
             }
         }
 
-        void ExportTiles( GMRTileLayer _tileLayer, IList<(Level.Layer layer, bool justInitialized)> _layersWithExtraData )
+        void ExportTiles( GMRTileLayer _tileLayer, IList<(Level.Layer layer, bool _initializingExisting)> _layersWithExtraData )
         {
-            IList<Level.Layer> layers = _layersWithExtraData.Where( t => !t.justInitialized).Select( t => t.layer).ToList();
+            IList<Level.Layer> layers = _layersWithExtraData.Where( t => !t._initializingExisting ).Select( t => t.layer).ToList();
             if ( layers.Count == 0)
                 return;
 
@@ -323,7 +384,7 @@ internal class LDTK2GM
 
             var mainLayer = layers.First();
 
-            if (layers.Count > 0 && !layers.All(t =>
+            if (layers.Count > 1 && !layers.All(t =>
                     t.pxOffsetX == mainLayer.pxOffsetX && t.pxOffsetY == mainLayer.pxOffsetY &&
                     t.__cWid == mainLayer.__cWid && t.__cHei == mainLayer.__cHei))
             {
@@ -347,7 +408,6 @@ internal class LDTK2GM
                     bool flipX = (tile.f & 2) > 0;
                     bool flipY = (tile.f & 1) > 0;
 
-                    int tileIndex = tile.t;
                     int tileX = tile.src[0] / layer.__gridSize;
                     int tileY = tile.src[1] / layer.__gridSize;
 
@@ -362,7 +422,8 @@ internal class LDTK2GM
 
                     if ( x < 0 || y < 0 || x >= layer.__cWid || y >= layer.__cHei )
                     {
-                        throw new IndexOutOfRangeException( $"Out of range: {x}, {y} not in range {layer.__cWid}, {layer.__cHei}, level {_level.identifier}" );
+                        AnsiConsole.WriteException( new IndexOutOfRangeException( $"Out of range: {x}, {y} not in range {layer.__cWid}, {layer.__cHei}, level {_level.identifier}" ) );
+                        continue;
                     }
 
                     newData[x, y] = finalIndex;
@@ -374,6 +435,64 @@ internal class LDTK2GM
                 AnsiConsole.MarkupLineInterpolated( $"Tiles changed at layer [green]{_tileLayer.name}[/] in [teal]{room.name}[/]" );
                 _tileLayer.tiles.Tiles = newData;
             }
+        }
+
+        void ValidateRoomInstances( GMRoom _room )
+        {
+            var existingInstances = _room.layers.Where(t => t is GMRInstanceLayer).SelectMany(t => ((GMRInstanceLayer)t).instances).ToHashSet();
+
+            ResourceList<GMRInstance>? list = _room.instanceCreationOrder;
+
+            for (int i = list.Count - 1; i >= 0; i--)
+            {
+                var instance = list[i];
+                if ( existingInstances.Contains( instance ) )
+                    continue;
+                existingInstances.Remove( instance );
+            }
+
+            existingInstances.ExceptWith(_room.instanceCreationOrder);
+
+            foreach (GMRInstance instance in existingInstances )
+            {
+                list.Add(instance);
+            }
+        }
+
+        void SortLayers(GMRoom _room)
+        {
+            List<string> orderInfo = new( _room.layers.Count );
+            foreach (var layer in _level.layerInstances)
+            {
+                orderInfo.Add(layer.__identifier);
+            }
+
+            for (int i = 0; i < _room.layers.Count; i++)
+            {
+                var layer = _room.layers[i];
+                if ( orderInfo.IndexOf(layer.name) > 0 )
+                    continue;
+
+                int insertAt = 0;
+                for (int j = i - 1; j >= 0; j--)
+                {
+                    int layerIndex = orderInfo.IndexOf(_room.layers[j].name);
+                    if ( layerIndex < 0 )
+                        continue;
+
+                    insertAt = layerIndex + 1;
+                    break;
+                }
+
+                orderInfo.Insert(insertAt, layer.name);
+            }
+
+            _room.layers.Sort((l, r) =>
+            {
+                var indexLeft = orderInfo.IndexOf(l.name);
+                var indexRight = orderInfo.IndexOf(r.name);
+                return indexLeft.CompareTo(indexRight);
+            } );
         }
     }
 

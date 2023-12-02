@@ -16,6 +16,7 @@ internal class SharedData
     public const string EntityAtlasName = "EntityAtlas";
 
     public const string FlipStateEnumName = "FlipState";
+    public const string ImageIndexState = "image_index";
 
     public static readonly GMObjectProperty FlipProperty = new()
     {
@@ -23,6 +24,13 @@ internal class SharedData
         varName = FlipStateEnumName,
         value = "None",
         listItems = new ResourceList<string>() { "None", "Flip_X", "Flip_Y", "Flip_X_Y" }
+    };
+
+    public static readonly GMObjectProperty ImageIndexProperty = new()
+    {
+        varType = eObjectPropertyType.Integer,
+        varName = ImageIndexState,
+        value = "0"
     };
 
     public static LDTKProject.Enum GetFlipEnum( LDTKProject _ldtkProject )

@@ -186,25 +186,33 @@ public static class IResourceContainerUtilities
 
         foreach ( var info in _container.GetMetas() )
         {
-            foreach ( IMeta entry in info.metaList )
+            for (int i = info.metaList.Count - 1; i >= 0; i--)
             {
-                var meta = entry;
+                IMeta entry = (IMeta) info.metaList[i]!;
 
-                if ( _container.Cache.TryGetResource( meta.uid, out var res ) )
+                if ( _container.Cache.TryGetResource( entry.uid, out var res ) )
                 {
-                    meta.Resource = res;
-                    res.Meta = meta;
-                    _container.Cache.AddMeta( meta );
+                    try
+                    {
+                        entry.Resource = res;
+                        res.Meta = entry;
+                        _container.Cache.AddMeta( entry );
 
-                    if ( res is LDTKProject.IResourceContainer otherContainer )
-                        otherContainer.UpdateMetaCache();
+                        if ( res is LDTKProject.IResourceContainer otherContainer )
+                            otherContainer.UpdateMetaCache();
+                    }
+                    catch ( Exception e )
+                    {
+                        AnsiConsole.MarkupLineInterpolated($"[red]Meta data got corrupted for {entry.identifier}. It was referencing {res.identifier}. Removing invalid Meta...[/]");
+                        AnsiConsole.WriteException(e);
+                        info.metaList.RemoveAt( i );
+                    }
                 }
                 else
                 {
-                    _container.Cache.AddMeta( meta );
+                    _container.Cache.AddMeta( entry );
                 }
             }
-
         }
     }
 
