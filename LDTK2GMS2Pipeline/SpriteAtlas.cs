@@ -27,6 +27,7 @@ public class SpriteAtlas
     public interface IAtlasItem
     {
         public GMSprite Sprite { get; }
+        public int ImageIndex { get; }
         public AtlasRectangle? PreviousRectangle { get; }
         public AtlasRectangle Rectangle { get; }
     }
@@ -34,6 +35,7 @@ public class SpriteAtlas
     private class AtlasItem : IAtlasItem
     {
         public GMSprite Sprite { get; }
+        public int ImageIndex { get; }
         public Image<Rgba32>? AtlasImage { get; set; }
         public AtlasRectangle? PreviousRectangle { get; set; } = null;
         public AtlasRectangle Rectangle { get; set; } = new();
@@ -41,10 +43,11 @@ public class SpriteAtlas
         public bool IsModified = false;
         public FileInfo ImagePath { get; }
 
-        public AtlasItem( GMSprite _sprite )
+        public AtlasItem( GMSprite _sprite, int _imageIndex = 0 )
         {
             Sprite = _sprite;
-            var path = System.IO.Path.Combine( Path.GetDirectoryName( ProjectInfo.GetProjectPath( Sprite.project ) ), Sprite.GetCompositePaths()[0] );
+            ImageIndex = _imageIndex;
+            var path = System.IO.Path.Combine( Path.GetDirectoryName( ProjectInfo.GetProjectPath( Sprite.project ) ), Sprite.GetCompositePaths()[_imageIndex] );
             ImagePath = new FileInfo( path );
         }
     }
@@ -59,17 +62,31 @@ public class SpriteAtlas
         lastAtlasUpdateTime = imageFile.Exists ? imageFile.LastWriteTimeUtc : null;
     }
 
-    public void Add( GMSprite _sprite )
+    private static string GetKey( GMSprite _sprite, int _imageIndex )
+    {
+        if (_imageIndex == 0)
+            return _sprite.name;
+
+        return $"{_sprite.name}#{_imageIndex}";
+    }
+
+    public void Add( GMSprite _sprite, bool _requireAllFrames = false )
     {
         Debug.Assert( _sprite != null );
 
-        if ( !items.TryGetValue( _sprite.name, out var info ) )
+        int count = _requireAllFrames ? _sprite.frames.Count : 1;
+        for (int i = 0; i < count; i++)
         {
-            info = new AtlasItem( _sprite );
-            items.Add( _sprite.name, info );
-        }
+            string key = GetKey(_sprite, i);
 
-        info.IsModified |= IsSpriteUpdateNeeded( info );
+            if ( !items.TryGetValue( key, out var info ) )
+            {
+                info = new AtlasItem( _sprite, i );
+                items.Add( key, info );
+            }
+
+            info.IsModified |= IsSpriteUpdateNeeded( info );
+        }
     }
 
     public void Add( IEnumerable<GMSprite> _sprites )
@@ -84,6 +101,11 @@ public class SpriteAtlas
     public IAtlasItem? Get( string? _name )
     {
         return _name == null ? null : items.GetValueOrDefault( _name );
+    }
+
+    public IAtlasItem? Get(GMSprite _sprite, int _imageIndex = 0)
+    {
+        return Get(GetKey(_sprite, _imageIndex));
     }
 
     /// <summary>

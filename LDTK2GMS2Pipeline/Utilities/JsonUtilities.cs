@@ -86,6 +86,12 @@ public static class JsonUtilities
 
     private static void MergeObjects(Utf8JsonWriter jsonWriter, JsonElement root1, JsonElement root2, Options options)
     {
+        if (root1.ValueKind == JsonValueKind.Null)
+        {
+            root2.WriteTo(jsonWriter);
+            return;
+        }
+
         Debug.Assert(root1.ValueKind == JsonValueKind.Object);
         Debug.Assert(root2.ValueKind == JsonValueKind.Object);
 

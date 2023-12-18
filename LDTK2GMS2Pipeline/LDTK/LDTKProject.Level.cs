@@ -1,5 +1,7 @@
-﻿using System.Collections;
+﻿using Spectre.Console;
+using System.Collections;
 using System.Text.Json.Serialization;
+using static LDTK2GMS2Pipeline.LDTK.LDTKProject;
 
 namespace LDTK2GMS2Pipeline.LDTK;
 
@@ -28,7 +30,7 @@ public partial class LDTKProject
         public string __smartColor { get; set; }
         public object __bgPos { get; set; }
         public string? externalRelPath { get; set; }
-        public List<object> fieldInstances { get; set; } = new();
+        public List<FieldInstance> fieldInstances { get; set; } = new();
         public List<Layer> layerInstances { get; set; } = new();
         public List<Neighbour> __neighbours { get; set; } = new();
 
@@ -58,9 +60,28 @@ public partial class LDTKProject
         {
             Level result = (Level) this.MemberwiseClone();
 
-            result.fieldInstances = new List<object>();
-            result.layerInstances = new List<Layer>();
+            result.layerInstances = new ();
             result.externalRelPath = $"{Path.GetFileNameWithoutExtension( _projectName )}/{identifier}.ldtkl";
+
+            return result;
+        }
+
+        /// <summary>
+        /// Returns field instance for setting depth of the layer.
+        /// Returned base on naming convention.
+        /// </summary>
+        public FieldInstance? GetLayerDepthField( Layer _layer )
+        {
+            string variableName = $"DEPTH_{_layer.__identifier}";
+            var result = fieldInstances.Find( t => t.__identifier.Equals( variableName, StringComparison.InvariantCultureIgnoreCase ) );
+            if (result == null)
+                return null;
+
+            if ( result.__type != "Int" )
+            {
+                AnsiConsole.MarkupLineInterpolated( $"[red]Level Field {result.__identifier} is supposed to be INT field.[/]" );
+                return null;
+            }
 
             return result;
         }
@@ -211,7 +232,7 @@ public partial class LDTKProject
             public object __value { get; set; }
             public object? __tile { get; set; }
             public int defUid { get; set; }
-            public List<DefaultOverride?> realEditorValues { get; set; } = new( 0 );
+            public List<DefaultOverride> realEditorValues { get; set; } = new( 0 );
 
             string IResource.identifier
             {

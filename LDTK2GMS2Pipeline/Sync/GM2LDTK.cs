@@ -1,8 +1,10 @@
 ﻿using LDTK2GMS2Pipeline.LDTK;
 using LDTK2GMS2Pipeline.Utilities;
 using Spectre.Console;
+using System.Linq;
 using YoYoStudio.Resources;
 using static LDTK2GMS2Pipeline.LDTK.LDTKProject;
+using static LDTK2GMS2Pipeline.LDTK.LDTKProject.Enum;
 using Rule = Spectre.Console.Rule;
 
 namespace LDTK2GMS2Pipeline.Sync;
@@ -21,17 +23,14 @@ internal static class GM2LDTK
     {
         var levelObjects = GetFilteredObjects(_gmProject).ToList();
 
-        var sprites = levelObjects
-            .Where( t => t.spriteId != null )
-            .Select( t => t.spriteId! )
-            .Distinct()
-            .ToList();
-
         AnsiConsole.Write( new Rule( "ATLAS" ) );
 
         string atlasPath = Path.Combine( _ldtkProject.ProjectPath.DirectoryName!, SharedData.IconFolder, $"{SharedData.EntityAtlasName}.png" );
         SpriteAtlas atlas = new( atlasPath, _ldtkProject.defaultGridSize );
-        atlas.Add( sprites );
+
+        var sprites = GetRequiredSprites( levelObjects, _ldtkProject);
+        foreach (var spriteInfo in sprites) 
+            atlas.Add(spriteInfo.sprite, spriteInfo.allFrames);
 
         _forceUpdateAtlas |= atlas.IsNew;
 
@@ -41,6 +40,10 @@ internal static class GM2LDTK
 
         if ( atlasUpdated || _forceUpdateAtlas )
             UpdateAtlasReferences( _ldtkProject, _gmProject, atlas, tileset, _forceUpdateAtlas );
+
+        AnsiConsole.Write( new Rule( "ENUMS" ) );
+
+        UpdateEnums( _ldtkProject, _gmProject, sprites.Where( t => t.allFrames ).Select( t => t.sprite), atlas, tileset );
 
         AnsiConsole.Write( new Rule( "ENTITIES" ) );
 
@@ -53,10 +56,32 @@ internal static class GM2LDTK
         AnsiConsole.Write( new Rule( "LEVELS" ) );
 
         UpdateLevels( _gmProject, _ldtkProject, _gmProject.GetResourcesByType<GMRoom>().Cast<GMRoom>().ToList() );
+    }
 
-        AnsiConsole.Write( new Rule( "ENUMS" ) );
+    private static List<(GMSprite sprite, bool allFrames)> GetRequiredSprites( List<GMObject> _objects, LDTKProject _ldtkProject )
+    {
+        Dictionary<GMSprite, bool> checker = new Dictionary<GMSprite, bool>();
 
-        UpdateEnums( _ldtkProject, _gmProject );
+        foreach (GMObject obj in _objects.Where( t => t.spriteId != null))
+        {
+            if (checker.TryGetValue(obj.spriteId, out bool allFrames))
+            {
+                if (allFrames)
+                    continue;
+            }
+
+            allFrames = false;
+
+            var res = _ldtkProject.GetResource<Entity>(obj.name);
+            if (res != null)
+            {
+                allFrames = res.fieldDefs.Exists(t => t.Meta?.identifier == SharedData.ImageIndexState || t.identifier == SharedData.ImageIndexState );
+            }
+
+            checker[obj.spriteId] = allFrames;
+        }
+
+        return checker.Select( pair => (pair.Key, pair.Value)).ToList();
     }
 
     private static void UpdateTilesets( LDTKProject _project, List<GMTileSet> _tilesets )
@@ -90,7 +115,7 @@ internal static class GM2LDTK
         }
     }
 
-    private static void UpdateEnums( LDTKProject _ldtkProject, GMProject _gmProject )
+    private static void UpdateEnums( LDTKProject _ldtkProject, GMProject _gmProject, IEnumerable<GMSprite> _spriteEnums, SpriteAtlas _atlas, Tileset _atlasTileset )
     {
         void UpdateEnum( string _name, IEnumerable<string> _values, bool _sort = true )
         {
@@ -106,6 +131,46 @@ internal static class GM2LDTK
         UpdateEnum( "GM_ROOMS", _gmProject.GetResourcesByType<GMRoom>().Select( t => t.name ) );
 
         UpdateEnum( "GM_SOUNDS", _gmProject.GetResourcesByType<GMSound>().Select( t => t.name ) );
+
+        foreach (GMSprite sprite in _spriteEnums )
+        {
+            _ldtkProject.CreateOrExistingForced(sprite.name, out LDTKProject.Enum en);
+
+            if (sprite.frames.Count != en.values.Count)
+            {
+                if (sprite.frames.Count > en.values.Count)
+                {
+                    for (int i = en.values.Count; i < sprite.frames.Count; i++)
+                    {
+                        en.values.Add( new LDTKProject.Enum.Value() { id = $"Image_{i}" } );
+                    }
+                }
+                else
+                {
+                    for ( int i = en.values.Count - 1; i >= sprite.frames.Count; i-- )
+                    {
+                        en.values.RemoveAt(i);
+                    }
+                }
+            }
+
+            en.iconTilesetUid = _atlasTileset.uid;
+            for (int i = 0; i < en.values.Count; i++)
+            {
+                var item = _atlas.Get(sprite, i);
+                if ( item == null )
+                    continue;
+
+                en.values[i].tileRect = new TileRect()
+                {
+                    tilesetUid = _atlasTileset.uid, 
+                    x = item.Rectangle.X, 
+                    y = item.Rectangle.Y, 
+                    w = item.Rectangle.Width, 
+                    h = item.Rectangle.Height
+                };
+            }
+        }
     }
 
     private static void UpdateLevels( GMProject _gmProject, LDTKProject _project, List<GMRoom> _rooms )
@@ -161,6 +226,29 @@ internal static class GM2LDTK
             return result;
         }
 
+        void TryLoadDepth( Level _level, Level.Layer _layer, GMRLayer _gmLayer )
+        {
+            var depthField = _level.GetLayerDepthField( _layer );
+            if ( depthField == null)
+                return;
+
+            var fieldDef = _project.defs.levelFields.Find(t => t.uid == depthField.defUid);
+            if ( fieldDef == null )
+                return;
+
+            int defaultDepth = 0;
+            if ( fieldDef.defaultOverride != null && !fieldDef.defaultOverride.TryGet(out defaultDepth ))
+                return;
+
+            depthField.__value = _gmLayer.depth;
+
+            bool isOverridden = _gmLayer.depth != defaultDepth;
+            if ( isOverridden )
+                depthField.realEditorValues = new() { new DefaultOverride(DefaultOverride.IdTypes.V_Int, _gmLayer.depth )};
+            else
+                depthField.realEditorValues = new(0);
+        }
+
         void UpdateLevel( GMRoom _room, Level _level )
         {
             _level.pxWid = _room.roomSettings.Width;
@@ -197,6 +285,8 @@ internal static class GM2LDTK
                     AnsiConsole.MarkupLineInterpolated( $"[yellow]Layer types do not match for [green]{layerDef.identifier}[/] in [olive]{_room.name}[/]: {gmLayer.GetType().Name} vs {layerDef.__type}[/]" );
                     continue;
                 }
+
+                TryLoadDepth( _level, layer, gmLayer );
 
                 layer.visible = gmLayer.visible;
 
@@ -278,7 +368,12 @@ internal static class GM2LDTK
                                 {
                                     instance.CreateOrExistingForced( fieldMeta.identifier, out Level.FieldInstance fi, fieldMeta.uid );
 
-                                    fi.SetValue( DefaultOverride.IdTypes.V_Int, gmInstance.imageIndex );
+                                    if ( !FieldConversion.GM2LDTK( _project, gmInstance.imageIndex.ToString(), fieldMeta.Resource!.__type, SharedData.ImageIndexProperty, out var result ) )
+                                    {
+                                        continue;
+                                    }
+
+                                    fi.SetValue( result );
                                 }
                             }
 
@@ -290,9 +385,9 @@ internal static class GM2LDTK
                                     continue;
                                 }
 
-                                if ( !ConvertDefaultValue( propOverride.propertyId, propOverride.value, out var result, fieldMeta.type, false, entityGM2LDTK ) )
+                                if ( !FieldConversion.GM2LDTK( _project, propOverride.value, fieldMeta.Resource!.__type, propOverride.propertyId, out var result, entityGM2LDTK ) )
                                 {
-                                    AnsiConsole.MarkupLineInterpolated( $"[red]Error processing value '{propOverride.value}' for field [green]{propOverride.varName} [[{propOverride.propertyId.varType}]][/] in [teal]{gmInstance.objectId.name}[/].[/]" );
+                                    AnsiConsole.MarkupLineInterpolated( $"[red]Error processing value '{propOverride.value}' for field [green]{propOverride.varName} [[{propOverride.propertyId.varType}]][/] in [teal]{gmInstance.objectId.name}[/], [olive]{_level.identifier}[/].[/]" );
                                     instance.CreateMetaFor<Level.FieldInstance.MetaData>( fieldMeta.identifier, fieldMeta.Resource!.uid ).GotError = true;
                                     continue;
                                 }

@@ -1,14 +1,11 @@
-﻿using YoYoStudio.Resources;
+﻿using LDTK2GMS2Pipeline.Sync;
+using System.Text.RegularExpressions;
+using YoYoStudio.Resources;
 
 namespace LDTK2GMS2Pipeline.LDTK;
 
 public partial class LDTKProject
 {
-    public static string ToValidEnumValue( string _input )
-    {
-        return _input.Replace( ' ', '_' ).Replace( "\"", "" );
-    }
-
     public class Enum : Resource<Enum.MetaData>
     {
         public class MetaData : Meta<Enum> { }
@@ -24,11 +21,6 @@ public partial class LDTKProject
         /// </summary>
         private bool needValidation = true;
 
-        /// <summary>
-        /// Non-serialized value for type of current enum. Also serves as a flag if enum was validated or not.
-        /// </summary>
-        private string? type = null;
-
         public class Value
         {
             public string? id { get; set; } = string.Empty;
@@ -36,44 +28,32 @@ public partial class LDTKProject
             public int color { get; set; } = 0xFFFFFF;
         }
 
-        public string? GetType( GMObjectProperty _property )
+        public void ValidateValues( GMObjectProperty _property )
         {
             if ( !needValidation )
-                return type;
+                return;
 
-            type = null;
             needValidation = false;
 
             UpdateValues( _property.listItems );
-
-            return type;
         }
 
         public void UpdateValues( IEnumerable<string> _values )
         {
             Dictionary<string, Value> originals = values.ToDictionary( t => t.id! );
             values = _values.Select( _t => new Value() { id = _t } ).ToList();
-            bool isEnum = values.Any( t => t.id.Contains( '.' ) );
-            if ( isEnum )
-            {
-                foreach ( Value value in values )
-                {
-                    int dotPosition = value.id.IndexOf( '.' );
-                    if ( dotPosition <= 0 )
-                        continue;
 
-                    type = value.id.Substring( 0, dotPosition );
-                    break;
-                }
-            }
-            else
+            foreach ( Value value in values )
             {
-                bool isString = values.All( t => t.id.StartsWith( '"' ) && t.id.EndsWith( '"' ) );
-                if ( isString )
-                    type = Field.MetaData.StringPropertyType;
-            }
+                if ( value.id == null )
+                    continue;
 
-            values.ForEach( t => t.id =  Field.MetaData.GM2LDTK( t.id, type, true ) );
+                int dotPosition = value.id.IndexOf( '.' );
+                if ( dotPosition >= 0 )
+                    value.id = value.id.Remove(0, dotPosition + 1);
+
+                value.id = ToValidEnumValue(value.id);
+            }
 
             foreach ( Value value in values )
             {
@@ -83,6 +63,39 @@ public partial class LDTKProject
                     value.tileRect = previous.tileRect;
                 }
             }
+        }
+
+        static string ToValidEnumValue( string _input )
+        {
+            Regex invalidCharsRgx = new Regex( "[^_a-zA-Z0-9]" );
+            var result = invalidCharsRgx.Replace(_input, string.Empty);
+
+            return result;
+        }
+
+        public static string ToPascalCase( string _input )
+        {
+            Regex invalidCharsRgx = new Regex( "[^_a-zA-Z0-9]" );
+            Regex whiteSpace = new Regex( @"(?<=\s)" );
+            Regex startsWithLowerCaseChar = new Regex( "^[a-z]" );
+            Regex firstCharFollowedByUpperCasesOnly = new Regex( "(?<=[A-Z])[A-Z0-9]+$" );
+            Regex lowerCaseNextToNumber = new Regex( "(?<=[0-9])[a-z]" );
+            Regex upperCaseInside = new Regex( "(?<=[A-Z])[A-Z]+?((?=[A-Z][a-z])|(?=[0-9]))" );
+
+            // replace white spaces with undescore, then replace all invalid chars with empty string
+            var pascalCase = invalidCharsRgx.Replace( whiteSpace.Replace( _input, "_" ), string.Empty )
+                // split by underscores
+                .Split( new char[] { '_' }, StringSplitOptions.RemoveEmptyEntries )
+                // set first letter to uppercase
+                .Select( w => startsWithLowerCaseChar.Replace( w, m => m.Value.ToUpper() ) )
+                // replace second and all following upper case letters to lower if there is no next lower (ABC -> Abc)
+                .Select( w => firstCharFollowedByUpperCasesOnly.Replace( w, m => m.Value.ToLower() ) )
+                // set upper case the first lower case following a number (Ab9cd -> Ab9Cd)
+                .Select( w => lowerCaseNextToNumber.Replace( w, m => m.Value.ToUpper() ) )
+                // lower second and next upper case letters except the last if it follows by any lower (ABcDEf -> AbcDef)
+                .Select( w => upperCaseInside.Replace( w, m => m.Value.ToLower() ) );
+
+            return string.Concat( pascalCase );
         }
     }
 }

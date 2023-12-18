@@ -195,7 +195,44 @@ public partial class LDTKProject : LDTKProject.IResourceContainer
         public List<Tileset> tilesets { get; set; }
         public List<Enum> enums { get; set; }
         public List<object> externalEnums { get; set; }
-        public List<object> levelFields { get; set; }
+        public List<LevelFieldDef> levelFields { get; set; }
+    }
+
+    public sealed class LevelFieldDef
+    {
+        public string identifier { get; set; }
+        public string? doc { get; set; }
+        public string __type { get; set; }
+        public int uid { get; set; }
+        public string type { get; set; }
+        public bool isArray { get; set; }
+        public bool canBeNull { get; set; }
+        public int? arrayMinLength { get; set; }
+        public int? arrayMaxLength { get; set; }
+        public string editorDisplayMode { get; set; }
+        public int editorDisplayScale { get; set; }
+        public string editorDisplayPos { get; set; }
+        public string editorLinkStyle { get; set; }
+        public object editorDisplayColor { get; set; }
+        public bool editorAlwaysShow { get; set; }
+        public bool editorShowInWorld { get; set; }
+        public bool editorCutLongValues { get; set; }
+        public object editorTextSuffix { get; set; }
+        public object editorTextPrefix { get; set; }
+        public bool useForSmartColor { get; set; }
+        public object min { get; set; }
+        public object max { get; set; }
+        public object regex { get; set; }
+        public object acceptFileTypes { get; set; }
+        public DefaultOverride? defaultOverride { get; set; }
+        public object textLanguageMode { get; set; }
+        public bool symmetricalRef { get; set; }
+        public bool autoChainRef { get; set; }
+        public bool allowOutOfLevelRef { get; set; }
+        public string allowedRefs { get; set; }
+        public object allowedRefsEntityUid { get; set; }
+        public List<object> allowedRefTags { get; set; }
+        public object tilesetUid { get; set; }
     }
 
     public sealed class DefaultOverride : IEquatable<DefaultOverride>
@@ -212,6 +249,26 @@ public partial class LDTKProject : LDTKProject.IResourceContainer
 
         [JsonPropertyName( "params" )]
         public List<object?> values { get; set; } = new List<object?>();
+
+        public bool TryGet<T>( out T? _value )
+        {
+            if (values.Count == 0)
+            {
+                _value = default;
+                return false;
+            }
+
+            try
+            {
+                _value = (T?) Convert.ChangeType( values[0]?.ToString(), typeof( T ) );
+                return true;
+            }
+            catch (Exception e)
+            {
+                _value = default;
+                return false;
+            }
+        }
 
         [JsonIgnore]
         public IdTypes Type
@@ -285,7 +342,10 @@ public partial class LDTKProject : LDTKProject.IResourceContainer
         string leftString = GetComparisonValue( _left );
         string rightString = GetComparisonValue( _right );
 
-        return leftString == rightString;
+        if (leftString == rightString)
+            return true;
+
+        return _left.ToString() == _right.ToString();
     }
 
     private static string GetComparisonValue( object _value )

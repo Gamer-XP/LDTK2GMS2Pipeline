@@ -146,6 +146,8 @@ internal class LDTK2GM
                         continue;
 
                     gmLayer.name = GetTrimmedName(layerDef.identifier);
+                    gmLayer.gridX = layerDef.gridSize;
+                    gmLayer.gridY = layerDef.gridSize;
                     room.layers.Add( gmLayer );
                     gmLayer.Finalise();
                     if ( !_gmProject.AddResource( gmLayer ) )
@@ -166,6 +168,8 @@ internal class LDTK2GM
             if ( filteredLayers.Count == 0)
                 continue;
 
+            UpdateLayerDepth(filteredLayers, gmLayer );
+
             switch ( gmLayer )
             {
                 case GMRInstanceLayer instanceLayer:
@@ -179,6 +183,31 @@ internal class LDTK2GM
 
         ValidateRoomInstances(room);
         SortLayers(room);
+
+        void UpdateLayerDepth( List<(Level.Layer Layer, bool initializingExisting)> _ldtkLayers, GMRLayer _gmLayer )
+        {
+            FieldInstance? depthField = null;
+            foreach (var ldtkLayer in _ldtkLayers)
+            {
+                depthField = _level.GetLayerDepthField(ldtkLayer.Layer);
+                if (depthField != null)
+                    break;
+            }
+
+            if ( depthField == null )
+                return;
+
+            try
+            {
+                var value = Convert.ToInt32( depthField.__value.ToString() );
+                _gmLayer.userdefinedDepth = true;
+                _gmLayer.depth = value;
+            }
+            catch (Exception)
+            {
+                
+            }
+        }
 
         void ExportEntities( GMRInstanceLayer _instanceLayer, LDTKProject.Level.Layer _layer, bool _initializingExisting )
         {
@@ -291,9 +320,11 @@ internal class LDTK2GM
 
                     if (fieldName == SharedData.ImageIndexState)
                     {
+                        var parsedIndex = FieldConversion.LDTK2GM(_ldtkProject, fieldInstance.__value, fieldDef, SharedData.ImageIndexProperty, _entityLDTK2GM);
+   
                         try
                         {
-                            imageIndex = Convert.ToInt32( fieldInstance.__value );
+                            imageIndex = Convert.ToInt32( parsedIndex );
                         }
                         catch (Exception)
                         {
@@ -326,7 +357,7 @@ internal class LDTK2GM
                     else
                         fieldInstance.Meta.GotError = false;
 
-                    value.value = Field.MetaData.LDTK2GM( _ldtkProject, fieldInstance.__value, fieldDef.Meta?.type, fieldDef, value.propertyId, _entityLDTK2GM );
+                    value.value = FieldConversion.LDTK2GM( _ldtkProject, fieldInstance.__value, fieldDef, value.propertyId, _entityLDTK2GM );
                 }
 
                 if (!gotFlipProperty)
