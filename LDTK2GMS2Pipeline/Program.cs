@@ -5,12 +5,14 @@ using LDTK2GMS2Pipeline.Sync;
 using LDTK2GMS2Pipeline.Utilities;
 using Spectre.Console;
 using System.Diagnostics;
+using CommandLine.Text;
 using YoYoStudio.Resources;
 
 internal class Program
 {
     private const bool LoadDebug = false;
     private const bool SaveDebug = false;
+    private const bool NoSave = false;
 
     private const string DebugEnding = "_debug";
 
@@ -23,8 +25,11 @@ internal class Program
             ResizeTileset
         }
 
-        [Option( "mode", HelpText = $"Mode at which application executed. {nameof( Modes.Import )}, {nameof( Modes.Export )}, {nameof( Modes.ResizeTileset )}" )]
-        public Modes Mode { get; set; }
+        [Option("mode", HelpText = $"Mode at which application executed." +
+                                   $"\n- {nameof(Modes.Import)} - Imports data from GMS2 to LDTK" +
+                                   $"\n- {nameof(Modes.Export)} - Exports data from LDTK to GMS2" +
+                                   $"\n- {nameof(Modes.ResizeTileset)} - Fixes tile indexes in all rooms after resize")]
+        public Modes? Mode { get; set; } = null;
 
         [Option( "reset_sprites", Default = false, HelpText = "Reset entities to reference their original tiles in the atlas. Valid in import mode only." )]
         public bool ForceUpdateAtlas { get; set; }
@@ -32,18 +37,74 @@ internal class Program
 
     public static async Task Main( string[] _args )
     {
-        var timer = Stopwatch.StartNew();
-        try
+        while (true)
         {
-            await Parser.Default.ParseArguments<AppOptions>( _args ).WithNotParsed( HandleParseError ).WithParsedAsync( HandleSuccess );
-        }
-        finally
-        {
-            AnsiConsole.MarkupLineInterpolated( $"[green]COMPLETE IN {timer.ElapsedMilliseconds} ms[/]" );
+            var parsed = Parser.Default.ParseArguments<AppOptions>(_args);
+            if (parsed is NotParsed<AppOptions> errors)
+            {
+                HandleError(errors.Errors);
+            }
+            else
+            {
+                if (parsed.Value.Mode != null)
+                {
+                    var timer = Stopwatch.StartNew();
+                    try
+                    {
+                        await HandleSuccess(parsed.Value);
+                    }
+                    finally
+                    {
+                        AnsiConsole.MarkupLineInterpolated( $"[green]COMPLETE IN {timer.ElapsedMilliseconds} ms[/]" );
+                    }
+                    return;
+                }
+
+                AnsiConsole.WriteLine(HelpText.AutoBuild(parsed, t => t, e => e));
+            }
+
+            var commands = AnsiConsole.Ask<string>("Input commands: ");
+            _args = commands.Split(' ');
         }
     }
 
     static async Task HandleSuccess( AppOptions _options )
+    {
+        if (_options.Mode == null)
+        {
+            AnsiConsole.WriteLine(HelpText.AutoBuild(Parser.Default.ParseArguments<AppOptions>(Array.Empty<string>()), h => h, e => e));
+            _options.Mode = AnsiConsole.Ask<AppOptions.Modes>("Input mode");
+        }
+        
+        switch ( _options.Mode )
+        {
+            case AppOptions.Modes.Import:
+            {
+                var projects = await LoadProjects();
+                await HandleImport(projects.ldtk, projects.gm, _options.ForceUpdateAtlas);
+                break;
+            }
+
+            case AppOptions.Modes.Export:
+            {
+                var projects = await LoadProjects();
+                await HandleExport(projects.ldtk, projects.gm);
+                break;
+            }
+
+            case AppOptions.Modes.ResizeTileset:
+            {
+                var projects = await LoadProjects();
+                await HandleResize(projects.gm);
+                break;
+            }
+
+            default:
+                throw new Exception("Unknown mode");
+        }
+    }
+
+    static async Task<(LDTKProject ldtk, GMProject gm)> LoadProjects()
     {
         var gmProjectFile = FindProjectFile( ".yyp" );
         var ldtkProjectFile = FindProjectFile( ".ldtk", _info => Path.GetFileNameWithoutExtension( _info.Name ).EndsWith( DebugEnding ) ^ !LoadDebug );
@@ -54,36 +115,23 @@ internal class Program
         if ( ldtkProjectFile is null )
             throw new FileNotFoundException( $"LDTK project file not found" );
 
-        var ldtkProjectTask = LDTKProject.Load( ldtkProjectFile );
-        var gmProjectTask = GMProjectUtilities.LoadGMProject( gmProjectFile );
+        Task<LDTKProject> ldtkProjectTask = LDTKProject.Load( ldtkProjectFile );
+        Task<GMProject> gmProjectTask = GMProjectUtilities.LoadGMProject( gmProjectFile );
 
         await Task.WhenAll( ldtkProjectTask, gmProjectTask );
 
         var ldtkProject = ldtkProjectTask.Result;
         var gmProject = gmProjectTask.Result;
 
-        switch ( _options.Mode )
-        {
-            case AppOptions.Modes.Import:
-                await HandleImport( ldtkProject, gmProject, _options.ForceUpdateAtlas );
-                break;
-
-            case AppOptions.Modes.Export:
-                await HandleExport( ldtkProject, gmProject );
-                break;
-
-            case AppOptions.Modes.ResizeTileset:
-                await HandleResize( gmProject );
-                break;
-
-            default:
-                throw new Exception("Unknown mode");
-        }
+        return (ldtkProject, gmProject);
     }
 
     static async Task HandleImport( LDTKProject _ldtkProject, GMProject _gmProject, bool _forceUpdateAtlas )
     {
         await GM2LDTK.ImportToLDTK( _gmProject, _ldtkProject, _forceUpdateAtlas );
+        
+        if (NoSave)
+            return;
 
         await _ldtkProject.Save( SaveDebug ? DebugEnding : string.Empty );
     }
@@ -93,6 +141,9 @@ internal class Program
         GMProjectUtilities.ResetDirtyAll( _gmProject );
 
         await LDTK2GM.ExportToGM( _gmProject, _ldtkProject );
+        
+        if (NoSave)
+            return;
 
         await _ldtkProject.SaveMeta();
 
@@ -154,7 +205,7 @@ internal class Program
         await GMProjectUtilities.SaveGMProject(_gmProject);
     }
 
-    static void HandleParseError( IEnumerable<Error> _errs )
+    static void HandleError( IEnumerable<Error> _errs )
     {
         foreach ( Error err in _errs )
             AnsiConsole.MarkupLineInterpolated( $"[red]{err}[/]" );

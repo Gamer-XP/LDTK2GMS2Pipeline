@@ -11,17 +11,17 @@ namespace LDTK2GMS2Pipeline.Sync;
 
 internal static class GM2LDTK
 {
-    private static IEnumerable<GMObject> GetFilteredObjects( GMProject _project )
+    private static IEnumerable<GMObject> GetFilteredObjects( GMProject _project, string _tag )
     {
         return _project
             .GetResourcesByType<GMObject>()
             .Cast<GMObject>()
-            .Where(t => t.tags.Contains(SharedData.LevelObjectTag));
+            .Where(t => t.tags.Contains(_tag));
     }
 
     public static async Task ImportToLDTK( GMProject _gmProject, LDTKProject _ldtkProject, bool _forceUpdateAtlas )
     {
-        var levelObjects = GetFilteredObjects(_gmProject).ToList();
+        var levelObjects = GetFilteredObjects(_gmProject, _ldtkProject.Options.LevelObjectTag).ToList();
 
         AnsiConsole.Write( new Rule( "ATLAS" ) );
 

@@ -11,7 +11,6 @@ namespace LDTK2GMS2Pipeline.Sync;
 
 internal class SharedData
 {
-    public const string LevelObjectTag = "Room Asset";
     public const string IconFolder = "Generated";
 
     public const string EntityAtlasName = "EntityAtlas";

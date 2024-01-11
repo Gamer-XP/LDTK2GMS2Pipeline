@@ -342,7 +342,7 @@ public static class IResourceContainerUtilities
         var key = new ResourceKey( _name, typeof( T ) );
         if ( _container.Cache.TryGetMeta( key, out var meta ) )
         {
-            _resource = (T) meta.Resource;
+            _resource = (T?) meta.Resource;
             if ( _resource is null && _container.Cache.TryGetResource( key, out var res ) )
             {
                 _resource = (T) res;

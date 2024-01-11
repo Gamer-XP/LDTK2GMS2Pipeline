@@ -15,6 +15,8 @@ namespace LDTK2GMS2Pipeline.Sync;
 [System.Serializable]
 public class Options
 {
+    public string LevelObjectTag { get; set; } = "Room Asset";
+    
     public Dictionary<string, List<string>> IgnoredProperties { get; set; } = new()
     {
         { 
