@@ -1,29 +1,26 @@
 {
   "profiles": {
-    "WSL": {
-      "commandName": "WSL2",
-      "distributionName": ""
+    "Youki": {
+      "commandName": "Project",
+      "workingDirectory": "F:\\Work\\GMS2\\Youki\\working_files\\ldtk",
+      "hotReloadEnabled": false
     },
     "Youki Import": {
       "commandName": "Project",
-      "workingDirectory": "E:\\Work\\GMS2\\Youki\\working_files\\ldtk",
-      "hotReloadEnabled": false
-    },
-    "Umbrella Import": {
-      "commandName": "Project",
-      "workingDirectory": "E:\\Work\\GMS2\\Umbrella\\working_files\\ldtk",
+      "commandLineArgs": "--mode Import",
+      "workingDirectory": "F:\\Work\\GMS2\\Youki\\working_files\\ldtk",
       "hotReloadEnabled": false
     },
     "Youki Export": {
       "commandName": "Project",
       "commandLineArgs": "--mode Export",
-      "workingDirectory": "E:\\Work\\GMS2\\Youki\\working_files\\ldtk",
+      "workingDirectory": "F:\\Work\\GMS2\\Youki\\working_files\\ldtk",
       "hotReloadEnabled": false
     },
     "Youki Resize": {
       "commandName": "Project",
       "commandLineArgs": "--mode ResizeTileset",
-      "workingDirectory": "E:\\Work\\GMS2\\Youki\\working_files\\ldtk",
+      "workingDirectory": "F:\\Work\\GMS2\\Youki\\working_files\\ldtk",
       "hotReloadEnabled": false
     }
   }

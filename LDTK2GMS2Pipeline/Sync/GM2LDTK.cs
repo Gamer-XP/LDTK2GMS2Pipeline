@@ -373,7 +373,7 @@ internal static class GM2LDTK
                                         continue;
                                     }
 
-                                    fi.SetValue( result );
+                                    fi.SetValues( result );
                                 }
                             }
 
@@ -395,7 +395,7 @@ internal static class GM2LDTK
                                 instance.CreateOrExistingForced( fieldMeta.identifier, out Level.FieldInstance fi, fieldMeta.uid );
 
                                 fi.Meta.GotError = false;
-                                fi.SetValue( result );
+                                fi.SetValues( result );
                             }
                         }
 

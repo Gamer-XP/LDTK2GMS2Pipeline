@@ -298,8 +298,13 @@ public static class IResourceContainerUtilities
 
         var key = new ResourceKey( _resource.identifier, _resource.GetType() );
 
-        if ( _container.Cache.TryGetMeta( key, out _ ) )
+        if (_container.Cache.TryGetMeta(key, out var existingMeta))
+        {
+            AnsiConsole.MarkupLineInterpolated($"Swapped UID for [green]{_name}[/] from [u]{existingMeta.uid}[/] to [u]{_resource.uid}[/]");
+            existingMeta.uid = _resource.uid;
+            _resource.Meta = existingMeta;
             return;
+        }
 
         _resource.Meta = _resource.CreateMeta( _name );
 

@@ -266,10 +266,16 @@ public partial class LDTKProject
                 return;
             }
 
-            bool isOptional = false;
-
-            var fieldTypeInfo = FieldConversion.GetDefaultFieldTypeInfo( _info.Property );
-            (string __type, string type) fieldType = (fieldTypeInfo.__type, fieldTypeInfo.type);
+            FieldConversion.FieldTypeInfo fieldType;
+            Field? field = _entity.GetResource<Field>(_info.Property.varName);
+            if (field != null)
+            {
+                fieldType = FieldConversion.GetFieldTypeInfo(field.__type);
+            }
+            else
+            {
+                fieldType = FieldConversion.GetDefaultFieldTypeInfo( _info.Property );
+            }
 
             bool isEnum = _info.Property.varType == eObjectPropertyType.List;
             if ( isEnum )
@@ -282,7 +288,7 @@ public partial class LDTKProject
 
             string defaultValue = GetDefaultValue( _object, _info.Property );
 
-            bool convertSuccess = FieldConversion.GM2LDTK( this, defaultValue, fieldType.__type, _info.Property, out DefaultOverride? defaultValueJson );
+            bool convertSuccess = FieldConversion.GM2LDTK( this, defaultValue, fieldType.__type, _info.Property, out DefaultOverride[]? defaultValueJson );
 
             if ( !convertSuccess && !loggedErrorsFor.Contains( _info ) )
             {
@@ -291,19 +297,19 @@ public partial class LDTKProject
             }
 
             bool justCreated;
-            Field? field;
-            if (!isOptional)
+            if (field == null)
                 justCreated = _entity.CreateOrExisting<Field>(_info.Property.varName, out field);
             else
             {
-                field = _entity.GetResource<Field>(_info.Property.varName);
-                if ( field != null && field.Meta == null)
-                    _entity.CreateMetaFor(field, _info.Property.varName );
+                if (field.Meta == null)
+                    _entity.CreateMetaFor(field, _info.Property.varName);
                 justCreated = false;
             }
 
             if ( field == null)
                 return;
+
+            var firstValue = defaultValueJson != null && defaultValueJson.Length > 0 ? defaultValueJson[0] : null;
 
             if ( justCreated )
             {
@@ -313,7 +319,7 @@ public partial class LDTKProject
                 field.editorShowInWorld = true;
                 field.editorDisplayMode = "NameAndValue";
                 field.editorDisplayPos = "Beneath";
-                field.defaultOverride = defaultValueJson;
+                field.defaultOverride = firstValue;
                 field.isArray = _info.Property.multiselect;
 
                 if ( _info.Property.rangeEnabled )
@@ -324,12 +330,12 @@ public partial class LDTKProject
             }
             else
             {
-                if (!object.Equals(defaultValueJson, field.defaultOverride))
+                if (!object.Equals(firstValue, field.defaultOverride))
                 {
                     if (!field.Meta.gotError)
                         AnsiConsole.MarkupLineInterpolated(
-                            $"Default Value changed for field [green]{field.identifier}[/] in [teal]{_entity.identifier}[/] from '{field.defaultOverride?.ToString()}' to '{defaultValueJson?.ToString()}'");
-                    field.defaultOverride = defaultValueJson;
+                            $"Default Value changed for field [green]{field.identifier}[/] in [teal]{_entity.identifier}[/] from '{field.defaultOverride?.ToString()}' to '{firstValue?.ToString()}'");
+                    field.defaultOverride = firstValue;
                 }
             }
 

@@ -260,6 +260,25 @@ public partial class LDTKProject
                 __value = _value.values?[0];
                 realEditorValues = new List<DefaultOverride>() { _value };
             }
+
+            public void SetValues( DefaultOverride[]? _values )
+            {
+                if (_values == null || _values.Length == 0)
+                {
+                    __value = null;
+                    realEditorValues = new List<DefaultOverride>();
+                    return;
+                }
+
+                if (_values.Length == 1)
+                {
+                    SetValue(_values[0]);
+                    return;
+                }
+
+                __value = _values.Select(t => t.values[0]).ToArray();
+                realEditorValues = _values.ToList();
+            }
         }
 
         public sealed class Neighbour
