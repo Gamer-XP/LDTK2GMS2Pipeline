@@ -15,14 +15,15 @@ Build notes:
 - Required GMS2 DLL files to build the app. If GM is installed at the default path - project should find them just fine. This was not tested will all versions, so it may not work properly with newer/old IDE versions.
 
 Initial setup steps:
-- Organize rooms in your GM project to have same names for same-purpose layers as much as possible. LDTK can only work with fixed layers.
-- Mark all objects you want to use in LDTK with "Room Asset" tag (can use different tag if you want, but will need to change it in .ini file later)
-- Create LDTK project somwhere in sub-folders of your GM project.
+- Create LDTK project somewhere in sub-folders of your GM project.
 - Add layers you will use to LDTK project.
+- Organize rooms in your GM project to have same names as LDTK layers as much as possible. LDTK can only work with fixed layers.
+- Mark all objects you want to use in LDTK with "Room Asset" tag (can use different tag if you want, but will need to change it in .ini file later)
 - Compile and put tool's exe in the same folder as LDTK project.
 - Create a .bat file with such content:
 
   {tool_exe_name}.exe --mode Import
+  
   {your_project_name}.ldtk
 
   This will allows you to quickly import data from GM before starting LDTK
