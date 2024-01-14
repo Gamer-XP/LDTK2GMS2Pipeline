@@ -232,6 +232,25 @@ public static class IResourceContainerUtilities
     }
 
     /// <summary>
+    /// Deletes all resources with no meta data
+    /// </summary>
+    public static void RemoveUnknownResources<T>( this LDTKProject.IResourceContainer _container )
+        where T: IResource
+    {
+        var lst = _container.GetResourceList<T>();
+        for (int i = lst.Count() - 1; i >= 0; i--)
+        {
+            var res = lst[i];
+            if (res.Meta == null)
+            {
+                if (_container.Cache.RemoveResource(res) && LogsNeeded( res.GetType() ))
+                        AnsiConsole.MarkupLineInterpolated( $"Deleted {res.GetType().Name} [teal]{res.identifier}[/]" );
+                lst.RemoveAt(i);
+            }
+        }
+    }
+
+    /// <summary>
     /// Creates new resource of given type
     /// </summary>
     public static TResource Create<TResource>( this LDTKProject.IResourceContainer _container, string _name, object? _id = null )
@@ -270,6 +289,8 @@ public static class IResourceContainerUtilities
                 throw new Exception( "Trying to create resource with already exists and got meta data" );
 
             result.Meta = meta;
+            if (_id != null)
+                meta.uid = _id;
             result.uid = meta.uid;
         }
         else

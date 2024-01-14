@@ -215,12 +215,27 @@ internal static class GM2LDTK
         Dictionary<string, string> MatchEntities()
         {
             Dictionary<string, string> result = new();
+            
+            // Finding already existing instances
             foreach (var instance in _project.levels.SelectMany( t => t.layerInstances).SelectMany( t => t.entityInstances))
             {
-                if ( instance.Meta == null)
+                if (instance.Meta == null)
                     continue;
 
                 result.Add( instance.Meta.identifier, instance.iid);
+            }
+            
+            // Generating iids for missing instances
+            foreach (var layerInstance in _rooms
+                         .SelectMany( r => r.layers)
+                         .Where( l => l is GMRInstanceLayer)
+                         .Cast<GMRInstanceLayer>()
+                         .SelectMany( l => l.instances))
+            {
+                if (result.ContainsKey(layerInstance.name))
+                    continue;
+                
+                result.Add(layerInstance.name, Guid.NewGuid().ToString());
             }
 
             return result;
@@ -293,7 +308,7 @@ internal static class GM2LDTK
                 switch ( gmLayer )
                 {
                     case GMRInstanceLayer instLayer:
-
+                        
                         layer.RemoveUnusedMeta<Level.EntityInstance.MetaData>(
                             instLayer.instances.Where( t => !t.ignore ).Select( t => t.name ),
                             _s =>
@@ -301,6 +316,8 @@ internal static class GM2LDTK
                                 if ( !layer.Remove<Level.EntityInstance>( _s.identifier ) )
                                     Console.WriteLine( $"Unable to remove object of type {_s.Resource.identifier}" );
                             } );
+
+                        layer.RemoveUnknownResources<Level.EntityInstance>();
 
                         foreach ( GMRInstance gmInstance in instLayer.instances )
                         {
@@ -329,7 +346,7 @@ internal static class GM2LDTK
                             int posX = (int) gmInstance.x;
                             int posY = (int) gmInstance.y;
 
-                            if ( layer.CreateOrExistingForced( gmInstance.name, out Level.EntityInstance instance ) )
+                            if ( layer.CreateOrExistingForced( gmInstance.name, out Level.EntityInstance instance, entityGM2LDTK.GetValueOrDefault(gmInstance.name) ) )
                             {
                                 instance.__pivot = new List<double>() { entityType.pivotX, entityType.pivotY };
                                 instance.__identifier = entityType.identifier;
