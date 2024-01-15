@@ -396,7 +396,7 @@ internal static class GM2LDTK
 
                             foreach ( GMOverriddenProperty propOverride in gmInstance.properties )
                             {
-                                if (!GetField(propOverride.varName, out Field.MetaData fieldMeta) || _project.Options.IsPropertyIgnored( propOverride.objectId, propOverride.propertyId ) )
+                                if (!GetField(propOverride.varName, out Field.MetaData fieldMeta) || _project.Options.IsPropertyIgnored( propOverride.objectId, propOverride.propertyId, gmInstance.objectId ) )
                                 {
                                     instance.Remove<Level.FieldInstance>( propOverride.varName, true );
                                     continue;

@@ -7,6 +7,7 @@ using System.Text.Json.Serialization;
 using System.Text.Json;
 using System.Threading.Tasks;
 using LDTK2GMS2Pipeline.LDTK;
+using LDTK2GMS2Pipeline.Utilities;
 using Spectre.Console;
 using YoYoStudio.Resources;
 
@@ -25,20 +26,24 @@ public class Options
         },
         {
             "~objExampleB",
-            new List<string>() { "ExampleIncludedProperty" }
+            new List<string>() { "ExampleOnlyIncludedProperty" }
         },
+        {
+            "objExampleA_Child",
+            new List<string>() { "~ExampleExcludedProperty (Forces ExampleExcludedProperty to be included in this child)" }
+        }
     };
 
     private class IgnoredPropertyCache
     {
-        public HashSet<string> Values;
+        public Dictionary<string, bool> Values;
         public bool IsInverted;
     }
 
     private Dictionary<string, IgnoredPropertyCache>? parsedIgnoredProperties = null;
 
 
-    public bool IsPropertyIgnored( GMObject _object, GMObjectProperty _property )
+    public bool IsPropertyIgnored( GMObject _propertyRoot, GMObjectProperty _property, GMObject _currentObject )
     {
         if ( parsedIgnoredProperties == null )
         {
@@ -55,18 +60,43 @@ public class Options
 
                 IgnoredPropertyCache cache = new()
                 {
-                    Values = new HashSet<string>(pair.Value),
+                    Values = new (pair.Value.Count),
                     IsInverted = isInverted
                 };
+
+                foreach (string s in pair.Value)
+                {
+                    bool shouldBeIncluded = s.StartsWith('~');
+                    if (shouldBeIncluded)
+                        cache.Values.Add(s.Substring(1), true);
+                    else
+                        cache.Values.Add(s, false);
+                }
 
                 parsedIgnoredProperties.Add( key, cache );
             }
         }
 
-        if (!parsedIgnoredProperties.TryGetValue(_object.name, out var values))
-            return false;
+        while (true)
+        {
+            bool isRoot = _currentObject == _propertyRoot;
+            if (parsedIgnoredProperties.TryGetValue(_currentObject.name, out var values))
+            {
+                bool gotValue = values.Values.TryGetValue(_property.varName, out bool shouldBeIncluded);
+                if (gotValue)
+                    return !shouldBeIncluded ^ values.IsInverted;
 
-        return values.Values.Contains(_property.varName) ^ values.IsInverted;
+                if (isRoot)
+                    return values.IsInverted;
+            }
+            if (isRoot)
+                break;
+            _currentObject = _currentObject.parentObjectId;
+            if (_currentObject == null)
+                break;
+        }
+
+        return false;
     }
 
     private static string ConvertFilename( string _projectPath )

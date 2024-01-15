@@ -199,7 +199,7 @@ public partial class LDTKProject
 
         foreach ( var propertyInfo in definedProperties )
         {
-            if (!Options.IsPropertyIgnored(propertyInfo.DefinedIn, propertyInfo.Property))
+            if (!Options.IsPropertyIgnored(propertyInfo.DefinedIn, propertyInfo.Property, _object))
             {
                 if ( propertyInfo.Property != SharedData.ImageIndexProperty )
                     UpdateField(propertyInfo);
