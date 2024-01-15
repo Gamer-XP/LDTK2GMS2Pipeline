@@ -22,13 +22,16 @@ internal class Program
         { 
             Import,
             Export,
-            ResizeTileset
+            ResizeTileset,
+            ResetMeta
         }
 
         [Option("mode", HelpText = $"Mode at which application executed." +
                                    $"\n- {nameof(Modes.Import)} - Imports data from GMS2 to LDTK" +
                                    $"\n- {nameof(Modes.Export)} - Exports data from LDTK to GMS2" +
-                                   $"\n- {nameof(Modes.ResizeTileset)} - Fixes tile indexes in all rooms after resize")]
+                                   $"\n- {nameof(Modes.ResizeTileset)} - Fixes tile indexes in all rooms after resize" + 
+                                   $"\n- {nameof(Modes.ResetMeta)} - Allows to reset meta data for known objects, letting import process them again")
+        ]  
         public Modes? Mode { get; set; } = null;
 
         [Option( "reset_sprites", Default = false, HelpText = "Reset entities to reference their original tiles in the atlas. Valid in import mode only." )]
@@ -94,8 +97,15 @@ internal class Program
 
             case AppOptions.Modes.ResizeTileset:
             {
-                var projects = await LoadProjects();
+                var projects = await LoadProjects( false, true );
                 await HandleResize(projects.gm);
+                break;
+            }
+
+            case AppOptions.Modes.ResetMeta:
+            {
+                var projects = await LoadProjects();
+                await HandleMetaReset(projects.ldtk, projects.gm);
                 break;
             }
 
@@ -104,26 +114,30 @@ internal class Program
         }
     }
 
-    static async Task<(LDTKProject ldtk, GMProject gm)> LoadProjects()
+    static async Task<(LDTKProject ldtk, GMProject gm)> LoadProjects( bool _ldtk = true, bool _gm = true )
     {
-        var gmProjectFile = FindProjectFile( ".yyp" );
-        var ldtkProjectFile = FindProjectFile( ".ldtk", _info => Path.GetFileNameWithoutExtension( _info.Name ).EndsWith( DebugEnding ) ^ !LoadDebug );
+        FileInfo? gmProjectFile = null, ldtkProjectFile = null;
 
-        if ( gmProjectFile is null )
-            throw new FileNotFoundException( $"Game Maker project file not found" );
+        if (_gm)
+        {
+            gmProjectFile = FindProjectFile(".yyp");
+            if (gmProjectFile is null)
+                throw new FileNotFoundException($"Game Maker project file not found");
+        }
 
-        if ( ldtkProjectFile is null )
-            throw new FileNotFoundException( $"LDTK project file not found" );
+        if (_ldtk)
+        {
+            ldtkProjectFile = FindProjectFile(".ldtk", _info => Path.GetFileNameWithoutExtension(_info.Name).EndsWith(DebugEnding) ^ !LoadDebug);
+            if (ldtkProjectFile is null)
+                throw new FileNotFoundException($"LDTK project file not found");
+        }
 
-        Task<LDTKProject> ldtkProjectTask = LDTKProject.Load( ldtkProjectFile );
-        Task<GMProject> gmProjectTask = GMProjectUtilities.LoadGMProject( gmProjectFile );
-
+        Task<LDTKProject> ldtkProjectTask = ldtkProjectFile != null? LDTKProject.Load( ldtkProjectFile ) : Task.FromResult<LDTKProject>(null!);
+        Task<GMProject> gmProjectTask = gmProjectFile != null? GMProjectUtilities.LoadGMProject( gmProjectFile ) : Task.FromResult<GMProject>(null!);
+        
         await Task.WhenAll( ldtkProjectTask, gmProjectTask );
 
-        var ldtkProject = ldtkProjectTask.Result;
-        var gmProject = gmProjectTask.Result;
-
-        return (ldtkProject, gmProject);
+        return (ldtkProjectTask.Result, gmProjectTask.Result);
     }
 
     static async Task HandleImport( LDTKProject _ldtkProject, GMProject _gmProject, bool _forceUpdateAtlas )
@@ -203,6 +217,102 @@ internal class Program
         TilemapResizer.Resize(_gmProject, tileSet, options );
 
         await GMProjectUtilities.SaveGMProject(_gmProject);
+    }
+
+    static async Task HandleMetaReset(LDTKProject _ldtk, GMProject _gm )
+    {
+        GMObject? obj;
+
+        while (true)
+        {
+            var nm = AnsiConsole.Ask<string>("Enter entity name: ");
+            obj = _gm.FindResourceByName(nm, typeof(GMObject)) as GMObject;
+            if (obj != null)
+                break;
+
+            AnsiConsole.MarkupLineInterpolated($"[red]Unable to find object with name {nm}[/]");
+        }
+
+        GMObjectProperty? prop;
+        while (true)
+        {
+            var fieldName = AnsiConsole.Ask<string>("Select what needs to be reset: enter property name or keyword 'all' for everything");
+            if (fieldName == "all")
+            {
+                prop = null;
+                break;
+            }
+
+            prop = obj.properties.Find(t => t.varName == fieldName);
+            if (prop != null)
+                break;
+            
+            AnsiConsole.MarkupLineInterpolated($"[red]Unable to find property with name {fieldName}[/]");
+        }
+
+        bool includeChildren = AnsiConsole.Ask<bool>("Including all child objects?");
+
+        IEnumerable<LDTKProject.Entity> EnumerateAllEntities()
+        {
+            bool GetEntity( GMObject _object, out LDTKProject.Entity _entity )
+            {
+                var ent = _ldtk.GetMeta<LDTKProject.Entity.MetaData>(_object.name);
+                if (ent != null && ent.Resource != null)
+                {
+                    _entity = ent.Resource;
+                    return true;
+                }
+
+                _entity = null!;
+                return false;
+            }
+            
+            IEnumerable<GMObject> EnumerateWithChildren(GMObject _object)
+            {
+                yield return _object;
+
+                foreach (GMObject gmObject in _object.childObjects)
+                {
+                    foreach (GMObject child in EnumerateWithChildren(gmObject))
+                    {
+                        yield return child;
+                    }
+                }
+            }
+
+            foreach (GMObject obj in EnumerateWithChildren(obj))
+            {
+                if (GetEntity(obj, out var ent))
+                    yield return ent;
+                
+                if (!includeChildren)
+                    break;
+            }
+        }
+
+        var entityMetaList = _ldtk.GetMetaList<LDTKProject.Entity.MetaData>();
+        foreach (var ent in EnumerateAllEntities())
+        {
+            if (prop == null)
+            {
+                entityMetaList.Remove(ent.Meta!);
+                AnsiConsole.MarkupLineInterpolated($"Removed all meta for {ent.Meta!.identifier}");
+            }
+            else
+            {
+                var meta = ent.GetMeta<LDTKProject.Field.MetaData>(prop.varName);
+                if (meta == null)
+                    continue;
+                var metaList = ent.GetMetaList<LDTKProject.Field.MetaData>();
+                metaList.Remove(meta);
+                AnsiConsole.MarkupLineInterpolated($"Removed {meta.identifier} from {ent.Meta!.identifier}");
+            }
+        }
+
+        if (NoSave)
+            return;
+
+        await _ldtk.SaveMeta();
     }
 
     static void HandleError( IEnumerable<Error> _errs )

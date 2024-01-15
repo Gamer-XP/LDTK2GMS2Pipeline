@@ -127,6 +127,18 @@ public partial class LDTKProject
 
             throw new Exception( $"Unknown type: {_metaType}" );
         }
+        
+        public List<T> GetResourceList<T>()
+            where T : IResource
+        {
+            return (List<T>) GetResourceList( typeof( T ) );
+        }
+
+        public List<T> GetMetaList<T>()
+            where T : IMeta
+        {
+            return (List<T>) GetMetaList( typeof( T ) );
+        }
     }
 
     public sealed class Field : Resource<Field.MetaData>
