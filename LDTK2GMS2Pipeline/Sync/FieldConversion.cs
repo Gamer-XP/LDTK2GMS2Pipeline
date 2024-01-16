@@ -289,6 +289,10 @@ internal class FieldConversion
                     return (uint) valueIndex < _gmProp.listItems.Count
                         ? _gmProp.listItems[valueIndex]
                         : "";
+                
+                case FieldType.Multilines:
+                case FieldType.String:
+                    return ConvertEntityRef(_value.ToString());
 
                 default:
                     return _value.ToString();
