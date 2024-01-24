@@ -51,7 +51,7 @@ public partial class LDTKProject
         public float pivotY { get; set; } = 0.5f;
         public List<Field> fieldDefs { get; set; } = new List<Field>();
 
-        public void Init( GMObject _object, Tileset _atlasTileset, SpriteAtlas _atlas )
+        public void InitSprite( GMObject _object, Tileset _atlasTileset, SpriteAtlas _atlas )
         {
             SpriteAtlas.IAtlasItem? atlasItem = _atlas.Get( _object.spriteId?.name );
 

@@ -138,10 +138,10 @@ public class SpriteAtlas
     /// <summary>
     /// Returns new position for given source rectangle, after atlas is updated
     /// </summary>
-    public Rectangle? UpdatePosition( Rectangle _rect )
+    public Rectangle? UpdatePosition( Rectangle _rect, GMSprite _expectedSprite )
     {
         var item = Get( _rect, true );
-        if ( item == null )
+        if ( item == null || item.Sprite != _expectedSprite )
             return null;
 
         var prev = item.PreviousRectangle!;

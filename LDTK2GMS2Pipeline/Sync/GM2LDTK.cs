@@ -502,6 +502,13 @@ internal static class GM2LDTK
             if ( entity.tilesetId != _atlasTileset.uid || entity.tileRect == null )
                 continue;
 
+            GMObject? obj = _gmProject.FindResourceByName(entity.Meta?.identifier, typeof(GMObject)) as GMObject;
+            GMSprite? objectSprite = obj?.spriteId;
+            if (obj == null || objectSprite == null)
+                continue;
+
+            bool isSoftUpdate = false;
+
             dynamic rect;
 
             if (!_forceUpdate)
@@ -509,15 +516,16 @@ internal static class GM2LDTK
                 var currentRect = new Rectangle(entity.tileRect.x, entity.tileRect.y, entity.tileRect.w,
                     entity.tileRect.h);
 
-                Rectangle? newRect = _atlas.UpdatePosition(currentRect);
+                Rectangle? newRect = _atlas.UpdatePosition(currentRect, objectSprite);
                 if (newRect != null)
                 {
                     rect = newRect.Value;
+                    isSoftUpdate = true;
                     goto found;
                 }
             }
 
-            var spriteName = (_gmProject.FindResourceByName( entity.Meta?.identifier, typeof( GMObject ) ) as GMObject)?.spriteId?.name;
+            var spriteName = objectSprite.name;
             SpriteAtlas.IAtlasItem? atlasItem = _atlas.Get( spriteName );
             if ( atlasItem == null )
                 continue;
@@ -534,6 +542,11 @@ internal static class GM2LDTK
                 w = rect.Width,
                 h = rect.Height
             };
+
+            if (!isSoftUpdate)
+            {
+                entity.InitSprite(obj, _atlasTileset, _atlas);
+            }
         }
     }
 
@@ -556,7 +569,7 @@ internal static class GM2LDTK
             if ( entity != null )
             {
                 if ( isNew )
-                    entity.Init( levelObject, _atlasTileset, _atlas );
+                    entity.InitSprite( levelObject, _atlasTileset, _atlas );
                 IResourceContainerUtilities.EnableLogging = isNew
                     ? IResourceContainerUtilities.LoggingLevel.Auto
                     : IResourceContainerUtilities.LoggingLevel.On;
