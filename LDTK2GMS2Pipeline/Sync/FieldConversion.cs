@@ -308,7 +308,10 @@ internal class FieldConversion
                 {
                     case JsonElement jsonElem:
                         if (jsonElem.ValueKind != JsonValueKind.Array)
-                            throw new Exception($"Unknown value type: {_value.GetType()}");
+                        {
+                            yield return jsonElem;
+                            yield break;
+                        }
 
                         foreach (JsonElement element in jsonElem.EnumerateArray())
                             yield return element;
