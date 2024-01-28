@@ -32,8 +32,10 @@ public partial class LDTKProject
 
         public bool RemoveResource( IResource _resource )
         {
-            resourceById.Remove( _resource.uid );
-            return resourceByName.Remove( new ResourceKey( _resource.identifier, _resource.GetType() ) );
+            bool either;
+            either = resourceById.Remove( _resource.uid );
+            either |= resourceByName.Remove( new ResourceKey( _resource.identifier, _resource.GetType() ) );
+            return either;
         }
 
         public bool RemoveMeta( IMeta _meta )
@@ -43,13 +45,19 @@ public partial class LDTKProject
 
         public void AddResource( IResource _resource )
         {
-            resourceById[_resource.uid] = _resource;
+            if (!resourceById.TryAdd(_resource.uid, _resource))
+            {
+                var existing = resourceById[_resource.uid];
+                AnsiConsole.MarkupLineInterpolated($"[red]Resource with uid {_resource.uid} already exists. Trying to add {_resource.GetType().Name}, existing {existing.GetType().Name}[/]");
+            }
+
             resourceByName[new ResourceKey( _resource.identifier, _resource.GetType() )] = _resource;
         }
 
-        public void AddMeta( IMeta _meta )
+        public bool AddMeta( IMeta _meta )
         {
-            metaByName[new ResourceKey( _meta.identifier, _meta.GetType() )] = _meta;
+            var key = new ResourceKey(_meta.identifier, _meta.GetType());
+            return metaByName.TryAdd(key, _meta);
         }
 
         public bool TryGetResource( object _uid, out IResource _result )
@@ -105,6 +113,27 @@ public static class IResourceContainerUtilities
     }
 
     public static LoggingLevel EnableLogging = LoggingLevel.Auto;
+    
+    private class LoggingChanged : IDisposable
+    {
+        private LoggingLevel previousLevel;
+
+        public LoggingChanged(LoggingLevel _level)
+        {
+            previousLevel = EnableLogging;
+            EnableLogging = _level;
+        }
+
+        public void Dispose()
+        {
+            EnableLogging = previousLevel;
+        }
+    }
+
+    public static IDisposable UsingLogging( LoggingLevel _level )
+    {
+        return new LoggingChanged(_level);
+    }
 
     private static bool LogsNeeded( Type _type )
     {
@@ -190,13 +219,25 @@ public static class IResourceContainerUtilities
             {
                 IMeta entry = (IMeta) info.metaList[i]!;
 
+                bool TryCacheMeta()
+                {
+                    if (_container.Cache.AddMeta(entry)) 
+                        return true;
+                    
+                    AnsiConsole.MarkupLineInterpolated($"[red]Meta for {entry.identifier} [[{entry.uid}]] already exists in {(_container is IResource r ? r.identifier : "Project")}! Removing...[/]");
+                    info.metaList.Remove(entry);
+                    return false;
+                }
+
                 if ( _container.Cache.TryGetResource( entry.uid, out var res ) )
                 {
                     try
                     {
+                        if (!TryCacheMeta())
+                            continue;
+                        
                         entry.Resource = res;
                         res.Meta = entry;
-                        _container.Cache.AddMeta( entry );
 
                         if ( res is LDTKProject.IResourceContainer otherContainer )
                             otherContainer.UpdateMetaCache();
@@ -210,7 +251,7 @@ public static class IResourceContainerUtilities
                 }
                 else
                 {
-                    _container.Cache.AddMeta( entry );
+                    TryCacheMeta();
                 }
             }
         }
@@ -234,7 +275,7 @@ public static class IResourceContainerUtilities
     /// <summary>
     /// Deletes all resources with no meta data
     /// </summary>
-    public static void RemoveUnknownResources<T>( this LDTKProject.IResourceContainer _container )
+    public static void RemoveUnknownResources<T>( this LDTKProject.IResourceContainer _container, Action<T>? _customLog = null )
         where T: IResource
     {
         var lst = _container.GetResourceList<T>();
@@ -243,8 +284,14 @@ public static class IResourceContainerUtilities
             var res = lst[i];
             if (res.Meta == null)
             {
-                if (_container.Cache.RemoveResource(res) && LogsNeeded( res.GetType() ))
-                        AnsiConsole.MarkupLineInterpolated( $"Deleted {res.GetType().Name} [teal]{res.identifier}[/]" );
+                _container.Cache.RemoveResource(res);
+                
+                if (_customLog != null)
+                    _customLog(res);
+                else
+                if (LogsNeeded( res.GetType() ))
+                    AnsiConsole.MarkupLineInterpolated($"Deleted {res.GetType().Name} [teal]{res.identifier}[/]");
+
                 lst.RemoveAt(i);
             }
         }
@@ -283,7 +330,7 @@ public static class IResourceContainerUtilities
         }
 
         // If meta for given name already exists - use it
-        if ( _container.Cache.TryGetMeta( key, out IMeta? meta ) )
+        if ( _container.Cache.TryGetMeta( key, out IMeta? meta ) && (_id == null || meta.uid == _id) )
         {
             if ( existingResource )
                 throw new Exception( "Trying to create resource with already exists and got meta data" );
@@ -295,6 +342,11 @@ public static class IResourceContainerUtilities
         }
         else
         {
+            if (meta != null)
+            {
+                AnsiConsole.MarkupLineInterpolated($"[yellow]Recreating meta for {typeof( TResource ).Name} [teal]{_name}[/] because of different uids[/]");
+            }
+            
             if ( !existingResource )
                 result.uid = _id ?? _container.GetNewUid( result );
             result.Meta = result.CreateMeta( _name );

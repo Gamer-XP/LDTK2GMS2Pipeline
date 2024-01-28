@@ -191,21 +191,39 @@ internal static class GM2LDTK
                 _project.Remove<Level>(pair.meta.identifier);
             }
         }
+        
+        bool levelMentioned = false;
+            
+        void LogLevel( Level _level, bool _justCreated = false )
+        {
+            if (levelMentioned)
+                return;
+                
+            if (_justCreated)
+                AnsiConsole.MarkupLineInterpolated($"Created level [olive]{_level.identifier}[/]");
+            else
+                AnsiConsole.MarkupLineInterpolated($"Level [olive]{_level.identifier}[/]");
+
+            levelMentioned = true;
+        }
+        
+        IResourceContainerUtilities.EnableLogging = IResourceContainerUtilities.LoggingLevel.Off;
 
         foreach ( GMRoom room in _rooms )
         {
-            if ( _project.CreateOrExisting<Level>( room.name, out var level ) )
-                level.worldX = GetMaxX();
-            else
+            levelMentioned = false;
+            
+            if (_project.CreateOrExisting<Level>(room.name, out var level))
             {
-                IResourceContainerUtilities.EnableLogging = IResourceContainerUtilities.LoggingLevel.On;
+                LogLevel(level!, true);
+                level!.worldX = GetMaxX();
             }
 
             if ( level != null )
                 UpdateLevel( room, level );
-
-            IResourceContainerUtilities.EnableLogging = IResourceContainerUtilities.LoggingLevel.Auto;
         }
+        
+        IResourceContainerUtilities.EnableLogging = IResourceContainerUtilities.LoggingLevel.Auto;
 
         int GetMaxX()
         {
@@ -272,8 +290,25 @@ internal static class GM2LDTK
             List<GMRLayer>? gmLayers = _room.AllLayers();
             foreach ( Layer layerDef in _project.defs.layers )
             {
+                bool layerMentioned = false;
+                
+                void LogLayer( bool _justCreated = false )
+                {
+                    if (layerMentioned)
+                        return;
+                    
+                    layerMentioned = true;
+                    LogLevel(_level);
+                    
+                    if (_justCreated)
+                        AnsiConsole.MarkupLineInterpolated($"- Created layer [green]{layerDef.identifier}[/]");
+                    else
+                        AnsiConsole.MarkupLineInterpolated($"- Layer [green]{layerDef.identifier}[/]");
+                }
+                
                 if ( _level.CreateOrExistingForced<Level.Layer>( layerDef.identifier, out var layer ) )
                 {
+                    LogLayer(true);
                     layer.__type = layerDef.__type;
                     layer.__gridSize = layerDef.gridSize;
                     layer.seed = Random.Shared.Next( 9999999 );
@@ -308,25 +343,44 @@ internal static class GM2LDTK
                 switch ( gmLayer )
                 {
                     case GMRInstanceLayer instLayer:
+
+                        void LogInstanceDeletion( string _mainName, string _reason, string? _subName = null )
+                        {
+                            LogLayer();
+                            
+                            if (_subName != null)
+                                AnsiConsole.MarkupLineInterpolated($"  - Deleted [teal]{_mainName}[/] [[{_subName}]] because {_reason}.");
+                            else
+                                AnsiConsole.MarkupLineInterpolated($"  - Deleted [teal]{_mainName}[/] because {_reason}.");
+                        }
                         
                         layer.RemoveUnusedMeta<Level.EntityInstance.MetaData>(
                             instLayer.instances.Where( t => !t.ignore ).Select( t => t.name ),
                             _s =>
                             {
                                 if ( !layer.Remove<Level.EntityInstance>( _s.identifier ) )
-                                    Console.WriteLine( $"Unable to remove object of type {_s.Resource.identifier}" );
+                                    Console.WriteLine( $"  - Unable to remove object of type {_s.Resource.identifier}" );
+                                else
+                                    LogInstanceDeletion( _s.identifier, "missing in the room");
                             } );
 
-                        layer.RemoveUnknownResources<Level.EntityInstance>();
+                        layer.RemoveUnknownResources<Level.EntityInstance>((r) =>
+                        {
+                            LogInstanceDeletion( r.__identifier, "no meta data found. Unknown resource");
+                        });
 
                         foreach ( GMRInstance gmInstance in instLayer.instances )
                         {
                             if ( gmInstance.ignore || gmInstance.objectId == null || !entityDict.TryGetValue( gmInstance.objectId, out var entityType ) )
                             {
-                                if ( !gmInstance.ignore && gmInstance.objectId != null )
-                                    AnsiConsole.MarkupLineInterpolated( $"[yellow]Unable to find matching object [teal]{gmInstance.objectId.name}[/] for level [olive]{_room.name}[/][/]" );
+                                if (!gmInstance.ignore && gmInstance.objectId != null)
+                                {
+                                    LogLayer();
+                                    AnsiConsole.MarkupLineInterpolated($"[yellow]  - Unable to find matching object [teal]{gmInstance.objectId.name}[/][/]");
+                                }
 
-                                layer.Remove<Level.EntityInstance>( gmInstance.name );
+                                if (layer.Remove<Level.EntityInstance>(gmInstance.name))
+                                    LogInstanceDeletion(gmInstance.objectId?.name ?? "???", "ignored or missing object",gmInstance.name);
                                 continue;
                             }
 
@@ -345,6 +399,27 @@ internal static class GM2LDTK
                             int height = (int) (entityType.height * MathF.Abs( gmInstance.scaleY ));
                             int posX = (int) gmInstance.x;
                             int posY = (int) gmInstance.y;
+      
+                            bool mentionedInstance = false;
+
+                            void LogInstance( bool _justCreated = false )
+                            {
+                                if (mentionedInstance)
+                                    return;
+                                mentionedInstance = true;
+                                LogLayer();
+                                if (_justCreated)
+                                    AnsiConsole.MarkupLineInterpolated($"  - Created [teal]{gmInstance.objectId.name}[/] [[{gmInstance.name}]]");
+                                else
+                                    AnsiConsole.MarkupLineInterpolated($"  - [teal]{gmInstance.objectId.name}[/] [[{gmInstance.name}]]");
+                            }
+                            
+                            void LogFieldCreation( Field.MetaData _field )
+                            {
+                                LogInstance();
+                                
+                                AnsiConsole.MarkupLineInterpolated($"    - Created field instance {_field.identifier}");
+                            }
 
                             if ( layer.CreateOrExistingForced( gmInstance.name, out Level.EntityInstance instance, entityGM2LDTK.GetValueOrDefault(gmInstance.name) ) )
                             {
@@ -352,6 +427,8 @@ internal static class GM2LDTK
                                 instance.__identifier = entityType.identifier;
                                 instance.defUid = entityType.uid;
                                 instance.__tile = entityType.tileRect;
+
+                                LogInstance(true);
                             }
 
                             if ( gmInstance.flipX )
@@ -373,7 +450,8 @@ internal static class GM2LDTK
                             {
                                 if ( GetField( SharedData.FlipStateEnumName, out Field.MetaData fieldMeta ) )
                                 {
-                                    instance.CreateOrExistingForced( fieldMeta.identifier, out Level.FieldInstance fi, fieldMeta.uid );
+                                    if (instance.CreateOrExistingForced(fieldMeta.identifier, out Level.FieldInstance fi, fieldMeta.uid))
+                                        LogFieldCreation(fieldMeta);
 
                                     fi.SetValue( DefaultOverride.IdTypes.V_String, flipEnum.values[flipIndex].id );
                                 }
@@ -383,7 +461,8 @@ internal static class GM2LDTK
                             {
                                 if ( GetField( SharedData.ImageIndexState, out Field.MetaData fieldMeta ) )
                                 {
-                                    instance.CreateOrExistingForced( fieldMeta.identifier, out Level.FieldInstance fi, fieldMeta.uid );
+                                    if (instance.CreateOrExistingForced( fieldMeta.identifier, out Level.FieldInstance fi, fieldMeta.uid ))
+                                        LogFieldCreation(fieldMeta);
 
                                     if ( !FieldConversion.GM2LDTK( _project, gmInstance.imageIndex.ToString(), fieldMeta.Resource!.__type, SharedData.ImageIndexProperty, out var result ) )
                                     {
@@ -409,7 +488,8 @@ internal static class GM2LDTK
                                     continue;
                                 }
 
-                                instance.CreateOrExistingForced( fieldMeta.identifier, out Level.FieldInstance fi, fieldMeta.uid );
+                                if (instance.CreateOrExistingForced(fieldMeta.identifier, out Level.FieldInstance fi, fieldMeta.uid))
+                                    LogFieldCreation(fieldMeta);
 
                                 fi.Meta.GotError = false;
                                 fi.SetValues( result );

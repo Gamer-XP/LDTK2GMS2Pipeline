@@ -136,14 +136,29 @@ public partial class LDTKProject : LDTKProject.IResourceContainer
         await Options.Save(savePath);
     }
 
-    public Task SaveMeta()
+    public Task SaveMeta( bool _backup = true )
     {
-        return SaveMeta(MetaPath.FullName);
+        return SaveMeta(MetaPath.FullName, _backup);
     }
 
-    public async Task SaveMeta( string _savePath )
+    public async Task SaveMeta( string _savePath, bool _backup = true )
     {
-        await using var metaFile = File.Open( Path.ChangeExtension( _savePath, ".meta" ), FileMode.Create );
+        _savePath = Path.ChangeExtension(_savePath, ".meta");
+        
+        if (_backup && File.Exists(_savePath))
+        {
+            var projectName = Path.GetFileNameWithoutExtension(_savePath);
+            var dirPath = Path.GetDirectoryName(_savePath);
+
+            var path = Path.Combine(dirPath, projectName, "backups", "meta");
+            if (!Directory.Exists(path))
+                Directory.CreateDirectory(path);
+
+            path = Path.Combine(path, $"{projectName}_{DateTime.Now:yy_MM_dd_HH_mm_ss}.meta");
+            File.Move(_savePath, path);
+        }
+
+        await using var metaFile = File.Open( _savePath, FileMode.Create );
         await JsonSerializer.SerializeAsync( metaFile, MetaData, new JsonSerializerOptions() { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault } );
     }
 
