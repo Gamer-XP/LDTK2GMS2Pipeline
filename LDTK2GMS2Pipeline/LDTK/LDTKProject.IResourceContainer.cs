@@ -47,8 +47,12 @@ public partial class LDTKProject
         {
             if (!resourceById.TryAdd(_resource.uid, _resource))
             {
-                var existing = resourceById[_resource.uid];
-                AnsiConsole.MarkupLineInterpolated($"[red]Resource with uid {_resource.uid} already exists. Trying to add {_resource.GetType().Name}, existing {existing.GetType().Name}[/]");
+                // Ignored because they are always listed, even if not overridden
+                if (_resource is not Level.FieldInstance)
+                {
+                    var existing = resourceById[_resource.uid];
+                    AnsiConsole.MarkupLineInterpolated($"[red]Resource with uid {_resource.uid} already exists. Trying to add {_resource.GetType().Name}, existing {existing.GetType().Name}[/]");
+                }
             }
 
             resourceByName[new ResourceKey( _resource.identifier, _resource.GetType() )] = _resource;

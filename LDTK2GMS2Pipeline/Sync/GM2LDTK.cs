@@ -383,6 +383,8 @@ internal static class GM2LDTK
                                     LogInstanceDeletion(gmInstance.objectId?.name ?? "???", "ignored or missing object",gmInstance.name);
                                 continue;
                             }
+                            
+                            List<string> usedProperties = new List<string>();
 
                             bool GetField( string _name, out Field.MetaData _meta )
                             {
@@ -392,7 +394,12 @@ internal static class GM2LDTK
                                     return false;
                                 }
                                 _meta = entityType.GetMeta<Field.MetaData>( _name );
-                                return _meta?.Resource != null;
+                                if (_meta?.Resource == null)
+                                    return false;
+
+                                usedProperties.Add(_name);
+                                
+                                return true;
                             }
 
                             int width = (int) (entityType.width * MathF.Abs( gmInstance.scaleX ));
@@ -418,7 +425,7 @@ internal static class GM2LDTK
                             {
                                 LogInstance();
                                 
-                                AnsiConsole.MarkupLineInterpolated($"    - Created field instance {_field.identifier}");
+                                AnsiConsole.MarkupLineInterpolated($"    - Created field instance [teal]{_field.identifier}[/]");
                             }
 
                             if ( layer.CreateOrExistingForced( gmInstance.name, out Level.EntityInstance instance, entityGM2LDTK.GetValueOrDefault(gmInstance.name) ) )
@@ -494,6 +501,17 @@ internal static class GM2LDTK
                                 fi.Meta.GotError = false;
                                 fi.SetValues( result );
                             }
+                            
+                            instance.RemoveUnusedMeta<Level.FieldInstance.MetaData>( usedProperties, _meta =>
+                            {
+                                LogInstance();
+                                instance.Remove<Level.FieldInstance>(_meta.identifier);
+                                
+                                if (_meta.Resource != null)
+                                    AnsiConsole.MarkupLineInterpolated($"    - Removed field instance [teal]{_meta.identifier}[/]");
+                                else
+                                    AnsiConsole.MarkupLineInterpolated($"    - Removed unused field instance meta [teal]{_meta.identifier}[/]");
+                            } );
                         }
 
                         break;
