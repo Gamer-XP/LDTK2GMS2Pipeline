@@ -37,12 +37,13 @@ internal class Program
 
         [Option( "reset_sprites", Default = false, HelpText = "Reset entities to reference their original tiles in the atlas. Valid in import mode only." )]
         public bool ForceUpdateAtlas { get; set; }
+
+        [Option( "branch", HelpText = $"Which GM version's DLLs to use to load/save project file. Options Are: {nameof(GMBranch.Stable)}, {nameof(GMBranch.Beta)}, {nameof(GMBranch.LTS)}")]
+        public GMBranch Branch { get; set; } = GMBranch.Stable;
     }
 
     public static async Task Main( string[] _args )
     {
-        LoadAssemblies();
-        
         while (true)
         {
             var parsed = Parser.Default.ParseArguments<AppOptions>(_args);
@@ -57,6 +58,7 @@ internal class Program
                     var timer = Stopwatch.StartNew();
                     try
                     {
+                        LoadAssemblies(GetInstallationPath(parsed.Value.Branch));
                         await HandleSuccess(parsed.Value);
                     }
                     finally
@@ -74,10 +76,39 @@ internal class Program
         }
     }
     
-    private static void LoadAssemblies()
+    private enum GMBranch
     {
-        var dllDirectory = @"C:\Program Files\GameMaker";
-        
+        Stable,
+        Beta,
+        LTS
+    }
+
+    private static string? GetInstallationPath( GMBranch _installation )
+    {
+        //TODO: Different methods for MACOS and LINUX
+
+        string registryFolder;
+        switch (_installation)
+        {
+            case GMBranch.LTS:
+                registryFolder = "GameMakerStudio2-LTS";
+                break;
+            case GMBranch.Beta:
+                registryFolder = "GameMakerStudio2-Beta";
+                break;
+            default:
+                registryFolder = "GameMakerStudio2";
+                break;
+        }
+
+        var installDir = Microsoft.Win32.Registry.GetValue($"HKEY_CURRENT_USER\\SOFTWARE\\{registryFolder}", "Install_Dir", null) as string;
+        return installDir;
+    }
+    
+    private static void LoadAssemblies( string? _path )
+    {
+        _path ??= Directory.GetCurrentDirectory();
+
         AppDomain.CurrentDomain.AssemblyResolve += delegate(object _sender, ResolveEventArgs _args)
         {
             string assemblyFile = (_args.Name.Contains(','))
@@ -85,15 +116,16 @@ internal class Program
                 : _args.Name;
 
             assemblyFile += ".dll";
-            
-            string targetPath = Path.Combine(dllDirectory, assemblyFile);
+
+            string targetPath = Path.Combine(_path, assemblyFile);
 
             try
             {
                 return Assembly.LoadFile(targetPath);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                AnsiConsole.MarkupLineInterpolated($"[red]{ex.Message}[/]");
                 return null;
             }
         };
