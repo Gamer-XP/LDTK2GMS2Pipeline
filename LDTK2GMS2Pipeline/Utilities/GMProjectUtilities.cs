@@ -17,16 +17,31 @@ public static class GMProjectUtilities
 
         var loadingWait = new TaskCompletionSource<GMProject>();
 
+        int cursorPosition = -1;
+
+        float progress = 0f;
+        GMProject? result = null;
+        
         ProjectInfo.LoadProject(_file.FullName, true, (_r) =>
         {
-            Console.WriteLine($"Success: {_r.name}");
-            loadingWait.TrySetResult((GMProject)_r);
+            Console.WriteLine($@"Success: {_r.name}");
+            result = (GMProject)_r;
+            if (progress >= 1f)
+                loadingWait.TrySetResult(result);
         }, (_r, _progress) =>
         {
-            Console.WriteLine($"Loading: {Math.Round(_progress * 100)}%");
+            if (cursorPosition < 0)
+                cursorPosition = Console.GetCursorPosition().Top;
+            var pos = Console.GetCursorPosition();
+            Console.SetCursorPosition(0, cursorPosition);
+            Console.WriteLine($@"Loading: {Math.Round(_progress * 100)}%");
+            Console.SetCursorPosition(pos.Left, Math.Max(pos.Top, cursorPosition + 1));
+            progress = _progress;
+            if (progress >= 1f && result != null)
+                loadingWait.TrySetResult(result);
         }, (_r) =>
         {
-            Console.WriteLine($"Failure: {_r.name}");
+            Console.WriteLine($@"Failure: {_r.name}");
             throw new Exception("Failed to load GameMaker project");
         });
 

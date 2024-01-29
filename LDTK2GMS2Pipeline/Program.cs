@@ -5,6 +5,7 @@ using LDTK2GMS2Pipeline.Sync;
 using LDTK2GMS2Pipeline.Utilities;
 using Spectre.Console;
 using System.Diagnostics;
+using System.Reflection;
 using CommandLine.Text;
 using YoYoStudio.Resources;
 
@@ -40,6 +41,8 @@ internal class Program
 
     public static async Task Main( string[] _args )
     {
+        LoadAssemblies();
+        
         while (true)
         {
             var parsed = Parser.Default.ParseArguments<AppOptions>(_args);
@@ -69,6 +72,31 @@ internal class Program
             var commands = AnsiConsole.Ask<string>("Input commands: ");
             _args = commands.Split(' ');
         }
+    }
+    
+    private static void LoadAssemblies()
+    {
+        var dllDirectory = @"C:\Program Files\GameMaker";
+        
+        AppDomain.CurrentDomain.AssemblyResolve += delegate(object _sender, ResolveEventArgs _args)
+        {
+            string assemblyFile = (_args.Name.Contains(','))
+                ? _args.Name.Substring(0, _args.Name.IndexOf(','))
+                : _args.Name;
+
+            assemblyFile += ".dll";
+            
+            string targetPath = Path.Combine(dllDirectory, assemblyFile);
+
+            try
+            {
+                return Assembly.LoadFile(targetPath);
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        };
     }
 
     static async Task HandleSuccess( AppOptions _options )
