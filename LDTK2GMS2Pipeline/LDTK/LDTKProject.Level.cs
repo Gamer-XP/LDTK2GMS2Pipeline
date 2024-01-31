@@ -1,6 +1,7 @@
 ﻿using Spectre.Console;
 using System.Collections;
 using System.Text.Json.Serialization;
+using LDTK2GMS2Pipeline.Utilities;
 using static LDTK2GMS2Pipeline.LDTK.LDTKProject;
 
 namespace LDTK2GMS2Pipeline.LDTK;
@@ -79,7 +80,7 @@ public partial class LDTKProject
 
             if ( result.__type != "Int" )
             {
-                AnsiConsole.MarkupLineInterpolated( $"[red]Level Field {result.__identifier} is supposed to be INT field.[/]" );
+                Log.Write( $"[{Log.ColorError}]Level Field [{Log.ColorField}]{result.__identifier}[/] is supposed to be INT field.[/]" );
                 return null;
             }
 

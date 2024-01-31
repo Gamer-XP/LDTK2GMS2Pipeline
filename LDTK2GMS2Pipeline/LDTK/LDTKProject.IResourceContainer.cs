@@ -1,5 +1,6 @@
 ﻿using Spectre.Console;
 using System.Collections;
+using LDTK2GMS2Pipeline.Utilities;
 using YoYoStudio.Resources;
 
 using static LDTK2GMS2Pipeline.LDTK.LDTKProject;
@@ -51,7 +52,7 @@ public partial class LDTKProject
                 if (_resource is not Level.FieldInstance)
                 {
                     var existing = resourceById[_resource.uid];
-                    AnsiConsole.MarkupLineInterpolated($"[red]Resource with uid {_resource.uid} already exists. Trying to add {_resource.GetType().Name}, existing {existing.GetType().Name}[/]");
+                    Log.Write($"[{Log.ColorError}]Resource with uid {_resource.uid} already exists. Trying to add {_resource.GetType().Name}, existing {existing.GetType().Name}[/]");
                 }
             }
 
@@ -109,49 +110,6 @@ public partial class LDTKProject
 
 public static class IResourceContainerUtilities
 {
-    public enum LoggingLevel
-    {
-        Off,
-        On,
-        Auto,
-    }
-
-    public static LoggingLevel EnableLogging = LoggingLevel.Auto;
-    
-    private class LoggingChanged : IDisposable
-    {
-        private LoggingLevel previousLevel;
-
-        public LoggingChanged(LoggingLevel _level)
-        {
-            previousLevel = EnableLogging;
-            EnableLogging = _level;
-        }
-
-        public void Dispose()
-        {
-            EnableLogging = previousLevel;
-        }
-    }
-
-    public static IDisposable UsingLogging( LoggingLevel _level )
-    {
-        return new LoggingChanged(_level);
-    }
-
-    private static bool LogsNeeded( Type _type )
-    {
-        switch ( EnableLogging )
-        {
-            case LoggingLevel.Off:
-                return false;
-            case LoggingLevel.On:
-                return true;
-            default:
-                return _type != typeof( Field ) && _type != typeof( Level.Layer ) && _type != typeof( Level.EntityInstance ) && _type != typeof( Level.FieldInstance );
-        }
-    }
-
     public static LDTKProject TryGetProject( object _resource )
     {
         switch ( _resource )
@@ -228,7 +186,7 @@ public static class IResourceContainerUtilities
                     if (_container.Cache.AddMeta(entry)) 
                         return true;
                     
-                    AnsiConsole.MarkupLineInterpolated($"[red]Meta for {entry.identifier} [[{entry.uid}]] already exists in {(_container is IResource r ? r.identifier : "Project")}! Removing...[/]");
+                    Log.Write($"[{Log.ColorError}]Meta for {entry.identifier} [[{entry.uid}]] already exists in {(_container is IResource r ? r.identifier : "Project")}! Removing...[/]");
                     info.metaList.Remove(entry);
                     return false;
                 }
@@ -248,7 +206,7 @@ public static class IResourceContainerUtilities
                     }
                     catch ( Exception e )
                     {
-                        AnsiConsole.MarkupLineInterpolated($"[red]Meta data got corrupted for {entry.identifier}. It was referencing {res.identifier}. Removing invalid Meta...[/]");
+                        Log.Write($"[{Log.ColorError}]Meta data got corrupted for {entry.identifier}. It was referencing {res.identifier}. Removing invalid Meta...[/]");
                         AnsiConsole.WriteException(e);
                         info.metaList.RemoveAt( i );
                     }
@@ -293,8 +251,8 @@ public static class IResourceContainerUtilities
                 if (_customLog != null)
                     _customLog(res);
                 else
-                if (LogsNeeded( res.GetType() ))
-                    AnsiConsole.MarkupLineInterpolated($"Deleted {res.GetType().Name} [teal]{res.identifier}[/]");
+                if (Log.CanAutoLog( res.GetType() ))
+                    Log.Write($"[{Log.ColorDeleted}]{res.GetType().Name} [{Log.GetColor(res.GetType())}]{res.identifier}[/] deleted[/]");
 
                 lst.RemoveAt(i);
             }
@@ -316,8 +274,8 @@ public static class IResourceContainerUtilities
         {
             result = (TResource) resource;
             existingResource = true;
-            if ( LogsNeeded( typeof( TResource ) ) )
-                AnsiConsole.MarkupLineInterpolated( $"Found a new {typeof( TResource ).Name} [teal]{_name}[/]" );
+            if ( Log.CanAutoLog( typeof( TResource ) ) )
+                Log.Write( $"[{Log.ColorCreated}]{typeof( TResource ).Name} [{Log.GetColor(typeof(TResource))}]{_name}[/] found.[/]" );
         }
         else
         {
@@ -329,8 +287,8 @@ public static class IResourceContainerUtilities
             existingResource = false;
             var resourceList = _container.GetResourceList<TResource>();
             resourceList.Add( result );
-            if ( LogsNeeded( typeof( TResource ) ) )
-                AnsiConsole.MarkupLineInterpolated( $"Created a new {typeof( TResource ).Name} [teal]{_name}[/]" );
+            if ( Log.CanAutoLog( typeof( TResource ) ) )
+                Log.Write( $"[{Log.ColorCreated}]{typeof( TResource ).Name} [{Log.GetColor(typeof(TResource))}]{_name}[/] created.[/]" );
         }
 
         // If meta for given name already exists - use it
@@ -348,7 +306,7 @@ public static class IResourceContainerUtilities
         {
             if (meta != null)
             {
-                AnsiConsole.MarkupLineInterpolated($"[yellow]Recreating meta for {typeof( TResource ).Name} [teal]{_name}[/] because of different uids[/]");
+                Log.Write($"[{Log.ColorWarning}]{typeof( TResource ).Name} [{Log.GetColor(typeof(TResource))}]{_name}[/] had meta recreated because of different uids[/]");
             }
             
             if ( !existingResource )
@@ -377,7 +335,7 @@ public static class IResourceContainerUtilities
 
         if (_container.Cache.TryGetMeta(key, out var existingMeta))
         {
-            AnsiConsole.MarkupLineInterpolated($"Swapped UID for [green]{_name}[/] from [u]{existingMeta.uid}[/] to [u]{_resource.uid}[/]");
+            Log.Write($"Swapped UID for [{Log.GetColor(_resource.GetType())}]{_name}[/] from [u]{existingMeta.uid}[/] to [u]{_resource.uid}[/]");
             existingMeta.uid = _resource.uid;
             _resource.Meta = existingMeta;
             return;
@@ -431,8 +389,8 @@ public static class IResourceContainerUtilities
                 _resource.Meta = meta;
                 meta.Resource = _resource;
                 meta.uid = _resource.uid;
-                if ( LogsNeeded( typeof( T ) ) )
-                    AnsiConsole.MarkupLineInterpolated( $"Restored removed resource [teal]{_resource.identifier}[/] as {meta.identifier}" );
+                if ( Log.CanAutoLog( typeof( T ) ) )
+                    Log.Write( $"[{Log.ColorCreated}]{typeof(T).Name} [{Log.GetColor(typeof(T))}]{_resource.identifier}[/] was restored as {meta.identifier}" );
             }
             return false;
         }
@@ -484,8 +442,8 @@ public static class IResourceContainerUtilities
                 _container.Cache.RemoveResource( _resource );
             }
 
-            if ( deletedAny && LogsNeeded( typeof( TResource ) ) )
-                AnsiConsole.MarkupLineInterpolated( $"Deleted {typeof( TResource ).Name} [teal]{_resource?.identifier ?? _meta?.identifier ?? "???"}[/]" );
+            if ( deletedAny && Log.CanAutoLog( typeof( TResource ) ) )
+                Log.Write( $"[{Log.ColorDeleted}]{typeof( TResource ).Name} [{Log.GetColor(typeof(TResource))}]{_resource?.identifier ?? _meta?.identifier ?? "???"}[/] removed.[/]" );
         }
 
         var key = new ResourceKey( _name, typeof( TResource ) );

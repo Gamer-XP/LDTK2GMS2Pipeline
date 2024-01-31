@@ -202,10 +202,12 @@ internal class Program
 
     static async Task HandleImport( LDTKProject _ldtkProject, GMProject _gmProject, bool _forceUpdateAtlas )
     {
-        await GM2LDTK.ImportToLDTK( _gmProject, _ldtkProject, _forceUpdateAtlas );
+        var atlas = await GM2LDTK.ImportToLDTK( _gmProject, _ldtkProject, _forceUpdateAtlas );
         
         if (NoSave)
             return;
+
+        await atlas.SaveAtlas();
 
         await _ldtkProject.Save( SaveDebug ? DebugEnding : string.Empty );
     }

@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using LDTK2GMS2Pipeline.Utilities;
 using static LDTK2GMS2Pipeline.LDTK.LDTKProject;
 using YoYoStudio.Resources;
 
@@ -206,7 +207,7 @@ internal class FieldConversion
         }
         catch ( NotSupportedException )
         {
-            AnsiConsole.MarkupLineInterpolated( $"[red]Unable to convert value {_value} from {_gmProp.varType} to {targetType.enumType}[/]" );
+            Log.Write( $"[{Log.ColorError}]Unable to convert value {_value} from {_gmProp.varType} to {targetType.enumType}[/]" );
             _result = new []{ new DefaultOverride( DefaultOverride.IdTypes.V_String, _value ) };
             return false;
         }
@@ -344,11 +345,11 @@ internal class FieldConversion
         }
         catch ( NotSupportedException )
         {
-            AnsiConsole.MarkupLineInterpolated( $"[red]Unable to convert value {_input} from {_ldtkProp.type} to {_gmProp.varType}[/]" );
+            Log.Write( $"[{Log.ColorError}]Unable to convert value {_input} from {_ldtkProp.type} to {_gmProp.varType}[/]" );
         }
         catch ( Exception e )
         {
-            AnsiConsole.MarkupInterpolated($"[red]{e}[/]");
+            Log.Write($"[{Log.ColorError}]{e}[/]");
         }
 
         return _input.ToString();

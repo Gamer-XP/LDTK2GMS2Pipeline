@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using LDTK2GMS2Pipeline.Utilities;
 using YoYoStudio.Resources;
 
 namespace LDTK2GMS2Pipeline;
@@ -173,6 +174,8 @@ public class SpriteAtlas
         return !spriteListsMatch;
     }
 
+    private Image<Rgba32>? updatedAtlas = null;
+
     public async Task<bool> Update()
     {
         var meta = await LoadMeta();
@@ -180,24 +183,29 @@ public class SpriteAtlas
         if ( !NeedRegeneration( meta ) )
         {
             ApplyMeta( meta );
-            Console.WriteLine( "Atlas is up to date." );
             return false;
         }
 
         await LoadImagesFromAtlas( meta );
         await UpdateImages();
 
-        var atlas = PackAtlas();
-        Width = atlas.Width;
-        Height = atlas.Height;
+        updatedAtlas = PackAtlas();
+        Width = updatedAtlas.Width;
+        Height = updatedAtlas.Height;
 
-        Directory.CreateDirectory( imageFile.DirectoryName );
-        await atlas.SaveAsync( imageFile.FullName );
-        await SaveMeta();
-
-        Console.WriteLine( "Atlas updated." );
+        Log.Write( $"Atlas updated. [[{Width}x{Height}]], with {items.Count} sprites" );
 
         return true;
+    }
+
+    public async Task SaveAtlas()
+    {
+        if (updatedAtlas == null)
+            return;
+        
+        Directory.CreateDirectory( imageFile.DirectoryName );
+        await updatedAtlas.SaveAsync( imageFile.FullName );
+        await SaveMeta();
     }
 
     private Image<Rgba32> PackAtlas()

@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Reflection;
+using Spectre.Console;
 using YoYoStudio.Resources;
 
 namespace LDTK2GMS2Pipeline.Utilities;
@@ -19,25 +20,39 @@ public static class GMProjectUtilities
         
         float progress = 0f;
         GMProject? result = null;
+
+        void TryFinishTask()
+        {
+            if (progress >= 1f && result != null)
+            {
+                Console.WriteLine();
+                loadingWait.TrySetResult(result);
+                result = null;
+            }
+        }
+
+        string GenerateProgressLine( float _progress )
+        {
+            int border = (int)(_progress * 10);
+            return $"\rLoading: [{ string.Concat( Enumerable.Range(1, 10).Select( i => i <= border? '-' : ' ' ) ) }] { Math.Round(_progress * 100) }%";
+        }
         
         ProjectInfo.LoadProject(_file.FullName, true, (_r) =>
         {
-            Console.WriteLine($@"Project {_r.name} loading successful");
             result = (GMProject)_r;
-            if (progress >= 1f)
-                loadingWait.TrySetResult(result);
+            TryFinishTask();
+            AnsiConsole.MarkupLineInterpolated($"Loaded project {_r.name}");
         }, (_r, _progress) =>
         {
             var pos = Console.GetCursorPosition();
-            Console.Write($"\rLoading: {Math.Round(_progress * 100)}%");
+            Console.Write(GenerateProgressLine(_progress));
             Console.SetCursorPosition(0, pos.Top);
             
             progress = _progress;
-            if (progress >= 1f && result != null)
-                loadingWait.TrySetResult(result);
+            TryFinishTask();
         }, (_r) =>
         {
-            Console.WriteLine($@"Project {_r.name} failed to load");
+            AnsiConsole.MarkupLineInterpolated($"[red]Failed to load {_r.name}[/]");
             throw new Exception("Failed to load GameMaker project");
         });
 
