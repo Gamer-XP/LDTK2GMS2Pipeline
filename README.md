@@ -22,13 +22,13 @@ Initial setup steps:
 - Compile and put tool's exe in the same folder as LDTK project.
 - Create a .bat file with such content:
 
-  {tool_exe_name}.exe --mode Import
+  {tool_exe_name}.exe import
   
   {your_project_name}.ldtk
 
   This will allows you to quickly import data from GM before starting LDTK
 
-- Create a command in LDTK project (either OnAfterSave or Manual) with such content: {tool_exe_name}.exe --mode Export. Use it to export data to GM directly from LDTK.
+- Create a command in LDTK project (either OnAfterSave or Manual) with such content: {tool_exe_name}.exe export. Use it to export data to GM directly from LDTK.
 
 Usage notes:
 - Tool is not guranteed to not destroy your LDTK/GMS2 projects yet. Use version control system to back up your data.
