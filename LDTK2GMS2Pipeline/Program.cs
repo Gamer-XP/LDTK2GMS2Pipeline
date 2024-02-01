@@ -1,12 +1,15 @@
-﻿using CommandLine;
+﻿using System.ComponentModel;
 using LDTK2GMS2Pipeline;
 using LDTK2GMS2Pipeline.LDTK;
 using LDTK2GMS2Pipeline.Sync;
 using LDTK2GMS2Pipeline.Utilities;
 using Spectre.Console;
+using Spectre.Console.Cli;
 using System.Diagnostics;
 using System.Reflection;
-using CommandLine.Text;
+using System.Resources;
+using System.Runtime.InteropServices.JavaScript;
+using LDTK2GMS2Pipeline.Properties;
 using YoYoStudio.Resources;
 
 internal class Program
@@ -17,62 +20,89 @@ internal class Program
 
     private const string DebugEnding = "_debug";
 
-    private class AppOptions
+    private class AppOptions : CommandSettings
     {
         public enum Modes
-        { 
+        {
             Import,
             Export,
             ResizeTileset,
             ResetMeta
         }
 
-        [Option("mode", HelpText = $"Mode at which application executed." +
-                                   $"\n- {nameof(Modes.Import)} - Imports data from GMS2 to LDTK" +
-                                   $"\n- {nameof(Modes.Export)} - Exports data from LDTK to GMS2" +
-                                   $"\n- {nameof(Modes.ResizeTileset)} - Fixes tile indexes in all rooms after resize" + 
-                                   $"\n- {nameof(Modes.ResetMeta)} - Allows to reset meta data for known objects, letting import process them again")
-        ]  
-        public Modes? Mode { get; set; } = null;
+        [CommandArgument(0, "<mode>")]
+        [Description($"Mode in which application is executed." +
+                     $"\n- [olive]{nameof(Modes.Import)}[/] - Imports data from GMS2 to LDTK" +
+                     $"\n- [olive]{nameof(Modes.Export)}[/] - Exports data from LDTK to GMS2" +
+                     $"\n- [olive]{nameof(Modes.ResizeTileset)}[/] - Fixes tile indexes in all rooms after resize" +
+                     $"\n- [olive]{nameof(Modes.ResetMeta)}[/] - Allows to reset meta data for known objects, letting import process them again")
+        ]
+        public Modes Mode { get; set; } = Modes.Import;
 
-        [Option( "reset_sprites", Default = false, HelpText = "Reset entities to reference their original tiles in the atlas. Valid in import mode only." )]
-        public bool ForceUpdateAtlas { get; set; }
-
-        [Option( "branch", HelpText = $"Which GM version's DLLs to use to load/save project file. Options Are: {nameof(GMBranch.Stable)}, {nameof(GMBranch.Beta)}, {nameof(GMBranch.LTS)}")]
+        [CommandArgument(1, "[branch]")]
+        [Description($"Which GM version is used to load the project. Options are: [olive]" +
+                     $"\n- {nameof(GMBranch.Stable)}" +
+                     $"\n- {nameof(GMBranch.Beta)}" +
+                     $"\n- {nameof(GMBranch.LTS)}[/]" +
+                     $"\nDefault is [olive]{nameof(GMBranch.Stable)}[/]")]
+        [DefaultValue(GMBranch.Stable)]
         public GMBranch Branch { get; set; } = GMBranch.Stable;
+
+        [CommandOption("-r|--reset_sprites")]
+        [Description("Reset entities to reference their original tiles in the atlas. Valid in import mode only.")]
+        public bool ForceUpdateAtlas { get; set; } = false;
     }
 
+    private static void DrawLogo()
+    {
+        using var iconStream = typeof(Program).Assembly.GetManifestResourceStream("LDTK2GMS2Pipeline.Resources.GMIconTiny.png");
+        if (iconStream == null)
+            return;
+        
+        var img = new CanvasImage(iconStream);
+        
+        AnsiConsole.Write(
+            new FigletText($"LDtk <> GMS2")
+                .RightJustified());
+        
+        AnsiConsole.Cursor.SetPosition(0, 0);
+        AnsiConsole.Write(img);
+    }
+    
     public static async Task Main( string[] _args )
     {
+        if (_args.Length == 0)
+            DrawLogo();
+        
+        var app = new CommandApp<App>();
+        app.Configure( _config => _config.PropagateExceptions() );
+        
         while (true)
         {
-            var parsed = Parser.Default.ParseArguments<AppOptions>(_args);
-            if (parsed is NotParsed<AppOptions> errors)
+            if (_args.Length == 0) 
+                _args = new [] { "-h" };
+
+            try
             {
-                HandleError(errors.Errors);
-            }
-            else
-            {
-                if (parsed.Value.Mode != null)
-                {
-                    var timer = Stopwatch.StartNew();
-                    try
-                    {
-                        LoadAssemblies(GetInstallationPath(parsed.Value.Branch));
-                        await HandleSuccess(parsed.Value);
-                    }
-                    finally
-                    {
-                        AnsiConsole.MarkupLineInterpolated( $"[green]COMPLETE IN {timer.ElapsedMilliseconds} ms[/]" );
-                    }
+                var result = await app.RunAsync(_args);
+                if (result > 0)
                     return;
-                }
-
-                AnsiConsole.WriteLine(HelpText.AutoBuild(parsed, t => t, e => e));
+            }
+            catch (CommandParseException e)
+            {
+                AnsiConsole.MarkupLineInterpolated($"[red]{e.Message}[/]");
+            }
+            catch (CommandRuntimeException e)
+            {
+                AnsiConsole.MarkupLineInterpolated($"[red]{e.Message}[/]");
+            }
+            catch(Exception e)
+            {
+                AnsiConsole.WriteException(e);
             }
 
-            var commands = AnsiConsole.Ask<string>("Input commands: ");
-            _args = commands.Split(' ');
+            var commandsLine = AnsiConsole.Ask<string>("Input commands: ");
+            _args = commandsLine.Split(' ');
         }
     }
     
@@ -81,6 +111,25 @@ internal class Program
         Stable,
         Beta,
         LTS
+    }
+    
+    private class App : AsyncCommand<AppOptions>
+    {
+        public override async Task<int> ExecuteAsync(CommandContext _context, AppOptions _settings)
+        {
+            var timer = Stopwatch.StartNew();
+            try
+            {
+                LoadAssemblies(GetInstallationPath(_settings.Branch));
+                await HandleSuccess(_settings);
+            }
+            finally
+            {
+                AnsiConsole.MarkupLineInterpolated( $"[green]COMPLETE IN {timer.ElapsedMilliseconds} ms[/]" );
+            }
+
+            return 1;
+        }
     }
 
     private static string? GetInstallationPath( GMBranch _installation )
@@ -133,12 +182,6 @@ internal class Program
 
     static async Task HandleSuccess( AppOptions _options )
     {
-        if (_options.Mode == null)
-        {
-            AnsiConsole.WriteLine(HelpText.AutoBuild(Parser.Default.ParseArguments<AppOptions>(Array.Empty<string>()), h => h, e => e));
-            _options.Mode = AnsiConsole.Ask<AppOptions.Modes>("Input mode");
-        }
-        
         switch ( _options.Mode )
         {
             case AppOptions.Modes.Import:
@@ -375,12 +418,6 @@ internal class Program
             return;
 
         await _ldtk.SaveMeta();
-    }
-
-    static void HandleError( IEnumerable<Error> _errs )
-    {
-        foreach ( Error err in _errs )
-            AnsiConsole.MarkupLineInterpolated( $"[red]{err}[/]" );
     }
 
     private static FileInfo? FindProjectFile( string _extension, Func<FileInfo, bool>? _filter = null )

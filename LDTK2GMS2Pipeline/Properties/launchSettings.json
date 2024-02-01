@@ -7,19 +7,19 @@
     },
     "Youki Import": {
       "commandName": "Project",
-      "commandLineArgs": "--mode Import",
+      "commandLineArgs": "Import",
       "workingDirectory": "F:\\Work\\GMS2\\Youki\\working_files\\ldtk",
       "hotReloadEnabled": false
     },
     "Youki Export": {
       "commandName": "Project",
-      "commandLineArgs": "--mode Export",
+      "commandLineArgs": "Export",
       "workingDirectory": "F:\\Work\\GMS2\\Youki\\working_files\\ldtk",
       "hotReloadEnabled": false
     },
     "Youki Resize": {
       "commandName": "Project",
-      "commandLineArgs": "--mode ResizeTileset",
+      "commandLineArgs": "ResizeTileset",
       "workingDirectory": "F:\\Work\\GMS2\\Youki\\working_files\\ldtk",
       "hotReloadEnabled": false
     }
