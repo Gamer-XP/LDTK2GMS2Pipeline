@@ -311,7 +311,13 @@ internal partial class LDTK2GM
 
                         continue;
                     }
+                    
+                    if (fieldInstance.Meta == null)
+                        instance.CreateMetaFor(fieldInstance, fieldName);
+                    else
+                        fieldInstance.Meta.GotError = false;
 
+                    bool isNew = false;
                     if (!sourceProperties.TryGetValue(fieldName, out var value))
                     {
                         var field = GMProjectUtilities.EnumerateAllProperties(gmInstance.objectId).FirstOrDefault(t => t.Property.varName == fieldName);
@@ -328,16 +334,21 @@ internal partial class LDTK2GM
 
                         value = new GMOverriddenProperty(field.Property, field.DefinedIn, gmInstance);
                         gmInstance.properties.Add(value);
-                        
-                        Log.Write($"[{Log.ColorCreated}]PropertyOverride [{Log.ColorField}]{value.varName}[/] created.[/]");
+
+                        isNew = true;
                     }
+  
+                    var newValue = FieldConversion.LDTK2GM(_ldtkProject, fieldInstance.__value, fieldDef, value.propertyId, _entityLDTK2GM);
 
-                    if (fieldInstance.Meta == null)
-                        instance.CreateMetaFor(fieldInstance, fieldName);
-                    else
-                        fieldInstance.Meta.GotError = false;
-
-                    value.value = FieldConversion.LDTK2GM(_ldtkProject, fieldInstance.__value, fieldDef, value.propertyId, _entityLDTK2GM);
+                    if (isNew || value.value != newValue)
+                    {
+                        if (!isNew)
+                            Log.Write($"PropertyOverride [{Log.ColorField}]{fieldName}[/] had value changed from '{value.value}' to '{newValue}'");
+                        else
+                            Log.Write($"[{Log.ColorCreated}]PropertyOverride [{Log.ColorField}]{value.varName}[/] created. Value: '{newValue}'[/]");
+                        
+                        value.value = newValue;
+                    }
                 }
 
                 if (!gotFlipProperty)
