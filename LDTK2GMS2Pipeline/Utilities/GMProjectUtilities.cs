@@ -44,10 +44,17 @@ public static class GMProjectUtilities
             AnsiConsole.MarkupLineInterpolated($"Loaded project {_r.name}");
         }, (_r, _progress) =>
         {
-            var pos = Console.GetCursorPosition();
-            Console.Write(GenerateProgressLine(_progress));
-            Console.SetCursorPosition(0, pos.Top);
-            
+            try
+            {
+                var pos = Console.GetCursorPosition();
+                Console.Write(GenerateProgressLine(_progress));
+                Console.SetCursorPosition(0, pos.Top);
+            }
+            catch
+            {
+                //ignored
+            }
+
             progress = _progress;
             TryFinishTask();
         }, (_r) =>

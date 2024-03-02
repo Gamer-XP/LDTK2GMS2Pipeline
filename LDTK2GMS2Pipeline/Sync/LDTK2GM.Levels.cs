@@ -106,10 +106,15 @@ internal partial class LDTK2GM
                     gmLayer.name = GetTrimmedName(layerDef.identifier);
                     gmLayer.gridX = layerDef.gridSize;
                     gmLayer.gridY = layerDef.gridSize;
-                    room.layers.Add(gmLayer);
+                    gmLayer.parent = room;
                     gmLayer.Finalise();
+                    room.layers.Add(gmLayer);
+                    
                     if (!_gmProject.AddResource(gmLayer))
                         throw new Exception();
+
+                    gmLayer.OwnerRoom = room;
+                    gmLayer.parent = room;
 
                     layerCreated = true;
                 }
@@ -224,11 +229,9 @@ internal partial class LDTK2GM
                     {
                         name = instance.Meta!.identifier,
                         objectId = obj,
+                        Owner = _instanceLayer,
                         parent = _instanceLayer,
                     };
-
-                    gmInstance.parent = _instanceLayer;
-                    gmInstance.Owner = _instanceLayer;
 
                     gmInstance.AddToProject(_gmProject);
                     _instanceLayer.instances.Add(gmInstance);
@@ -463,14 +466,16 @@ internal partial class LDTK2GM
         {
             var existingInstances = _room.layers.Where(t => t is GMRInstanceLayer).SelectMany(t => ((GMRInstanceLayer)t).instances).ToHashSet();
 
-            ResourceList<GMRInstance>? list = _room.instanceCreationOrder;
+            ResourceList<GMRInstance> list = _room.instanceCreationOrder;
 
             for (int i = list.Count - 1; i >= 0; i--)
             {
                 var instance = list[i];
-                if (existingInstances.Contains(instance))
-                    continue;
-                existingInstances.Remove(instance);
+                if (!existingInstances.Contains(instance))
+                {
+                    existingInstances.Remove(instance);
+                    list.RemoveAt(i);
+                }
             }
 
             existingInstances.ExceptWith(_room.instanceCreationOrder);
