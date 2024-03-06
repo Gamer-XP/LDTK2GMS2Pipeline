@@ -7,9 +7,6 @@ using Spectre.Console;
 using Spectre.Console.Cli;
 using System.Diagnostics;
 using System.Reflection;
-using System.Resources;
-using System.Runtime.InteropServices.JavaScript;
-using LDTK2GMS2Pipeline.Properties;
 using YoYoStudio.Resources;
 
 internal class Program

@@ -1,12 +1,6 @@
 ﻿using LDTK2GMS2Pipeline.LDTK;
-using Spectre.Console;
-using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 using LDTK2GMS2Pipeline.Utilities;
 using static LDTK2GMS2Pipeline.LDTK.LDTKProject;
 using YoYoStudio.Resources;

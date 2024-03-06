@@ -1,5 +1,4 @@
-﻿using LDTK2GMS2Pipeline.Sync;
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using YoYoStudio.Resources;
 
 namespace LDTK2GMS2Pipeline.LDTK;

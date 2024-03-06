@@ -1,6 +1,5 @@
 ﻿using LDTK2GMS2Pipeline.LDTK;
 using LDTK2GMS2Pipeline.Utilities;
-using Spectre.Console;
 using YoYoStudio.Resources;
 
 namespace LDTK2GMS2Pipeline.Sync;

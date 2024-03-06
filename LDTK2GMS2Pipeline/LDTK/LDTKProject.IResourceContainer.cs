@@ -428,8 +428,7 @@ public static class IResourceContainerUtilities
             {
                 deletedAny = true;
                 var metaList = _container.GetMetaList( IResource.GetMetaType( typeof( TResource ) ) );
-                var index = metaList.IndexOf( _meta );
-                metaList.RemoveAt( index );
+                metaList.Remove(_meta);
                 _container.Cache.RemoveMeta( _meta );
             }
 
@@ -437,8 +436,7 @@ public static class IResourceContainerUtilities
             {
                 deletedAny = true;
                 var resList = _container.GetResourceList( typeof( TResource ) );
-                var index = resList.IndexOf( _resource );
-                resList.RemoveAt( index );
+                resList.Remove(_resource);
                 _container.Cache.RemoveResource( _resource );
             }
 

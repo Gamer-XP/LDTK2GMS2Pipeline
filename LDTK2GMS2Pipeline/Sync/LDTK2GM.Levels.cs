@@ -265,7 +265,7 @@ internal partial class LDTK2GM
                     if (fieldMeta == null)
                         shouldRemove = false;
                     else
-                        shouldRemove = fieldMeta.Resource != null && (data.meta == null || (data.meta.Resource == null && !data.meta.GotError));
+                        shouldRemove = (fieldMeta.Resource != null && (data.meta == null || (data.meta.Resource == null && !data.meta.GotError) || (data.meta.Resource != null && !data.meta.Resource.IsOverridden)));
 
                     if (shouldRemove)
                     {

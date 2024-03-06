@@ -1,8 +1,8 @@
 using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Advanced;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 
 public static class ImageUtilities
 {
@@ -83,6 +83,6 @@ public static class ImageUtilities
 
     public static byte[] SaveToArray( this Image _image )
     {
-        return SaveToArray( _image, _image.GetConfiguration().ImageFormatsManager.GetEncoder( PngFormat.Instance ) );
+        return SaveToArray( _image, _image.Configuration.ImageFormatsManager.GetEncoder( PngFormat.Instance ) );
     }
 }

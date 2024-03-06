@@ -56,6 +56,7 @@ public static class Log
         PushAction((i) =>
         {
             AnsiConsole.Write( new Rule(_title) );
+            AnsiConsole.WriteLine();
         }, true);
     }
 

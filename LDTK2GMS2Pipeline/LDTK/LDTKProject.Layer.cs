@@ -1,5 +1,4 @@
-﻿using Spectre.Console;
-using YoYoStudio.Resources;
+﻿using YoYoStudio.Resources;
 
 namespace LDTK2GMS2Pipeline.LDTK;
 

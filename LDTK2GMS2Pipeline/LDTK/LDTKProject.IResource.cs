@@ -1,5 +1,4 @@
-﻿using System.Security.Cryptography;
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace LDTK2GMS2Pipeline.LDTK;
 

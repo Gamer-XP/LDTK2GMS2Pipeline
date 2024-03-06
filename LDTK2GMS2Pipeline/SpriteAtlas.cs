@@ -4,6 +4,9 @@ using System.Numerics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LDTK2GMS2Pipeline.Utilities;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 using YoYoStudio.Resources;
 
 namespace LDTK2GMS2Pipeline;

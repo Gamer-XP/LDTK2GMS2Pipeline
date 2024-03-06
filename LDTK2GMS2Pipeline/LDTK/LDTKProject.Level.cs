@@ -1,8 +1,6 @@
-﻿using Spectre.Console;
-using System.Collections;
+﻿using System.Collections;
 using System.Text.Json.Serialization;
 using LDTK2GMS2Pipeline.Utilities;
-using static LDTK2GMS2Pipeline.LDTK.LDTKProject;
 
 namespace LDTK2GMS2Pipeline.LDTK;
 

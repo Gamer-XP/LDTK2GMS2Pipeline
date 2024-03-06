@@ -1,14 +1,8 @@
 ﻿using System.Collections;
-using Spectre.Console;
-using System.Text.RegularExpressions;
 using YoYoStudio.Resources;
 using static LDTK2GMS2Pipeline.Utilities.GMProjectUtilities;
-using System.Reflection;
 using LDTK2GMS2Pipeline.Sync;
-using Microsoft.VisualBasic.FileIO;
 using LDTK2GMS2Pipeline.Utilities;
-using static LDTK2GMS2Pipeline.LDTK.LDTKProject.Level;
-using System.Text.Json;
 
 namespace LDTK2GMS2Pipeline.LDTK;
 

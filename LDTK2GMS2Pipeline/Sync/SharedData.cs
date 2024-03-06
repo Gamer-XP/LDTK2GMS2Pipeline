@@ -1,10 +1,4 @@
 ﻿using LDTK2GMS2Pipeline.LDTK;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using YoYoStudio.Resources;
 
 namespace LDTK2GMS2Pipeline.Sync;
