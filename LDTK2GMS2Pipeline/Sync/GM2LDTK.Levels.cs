@@ -267,7 +267,7 @@ internal static partial class GM2LDTK
                                 }
                             }
 
-                            foreach (GMOverriddenProperty propOverride in gmInstance.properties)
+                            foreach (GMOverriddenProperty propOverride in gmInstance.properties.Where( t => t.propertyId != null))
                             {
                                 if (!GetField(propOverride.varName, out LDTKProject.Field.MetaData fieldMeta) || _project.Options.IsPropertyIgnored(propOverride.objectId, propOverride.propertyId, gmInstance.objectId))
                                 {

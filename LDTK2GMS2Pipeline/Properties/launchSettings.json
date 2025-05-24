@@ -2,19 +2,19 @@
   "profiles": {
     "Youki": {
       "commandName": "Project",
-      "workingDirectory": "E:\\Work\\GMS2\\Youki\\working_files\\ldtk",
+      "workingDirectory": "E:\\Work\\GMS2\\Youki\\ldtk",
       "hotReloadEnabled": false
     },
     "Youki Import": {
       "commandName": "Project",
       "commandLineArgs": "Import",
-      "workingDirectory": "E:\\Work\\GMS2\\Youki\\working_files\\ldtk",
+      "workingDirectory": "E:\\Work\\GMS2\\Youki\\ldtk",
       "hotReloadEnabled": false
     },
     "Youki Export": {
       "commandName": "Project",
       "commandLineArgs": "Export",
-      "workingDirectory": "E:\\Work\\GMS2\\Youki\\working_files\\ldtk",
+      "workingDirectory": "E:\\Work\\GMS2\\Youki\\ldtk",
       "hotReloadEnabled": false
     }
   }

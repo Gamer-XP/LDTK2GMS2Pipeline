@@ -529,11 +529,18 @@ public static class IResourceContainerUtilities
     {
         Dictionary<TKey, TValue> result = new();
 
-        foreach ( var obj in _gmProject.GetResourcesByType<TKey>().Cast<TKey>() )
+        var metaType = IResource.GetMetaType(typeof(TValue));
+
+        var allResources = _gmProject.GetResourcesByType<TKey>().Cast<TKey>().ToDictionary(t => t.name);
+
+        foreach (IMeta meta in _container.GetMetaList(metaType))
         {
-            var res = _container.GetResource<TValue>( obj.name );
-            if ( res != null )
-                result.Add( obj, res );
+            if (meta.Resource == null)
+                continue;
+
+            TKey? obj;
+            if (allResources.TryGetValue(meta.identifier, out obj) || allResources.TryGetValue(meta.Resource.identifier, out obj))
+                result.Add(obj, (TValue)meta.Resource);
         }
 
         return result;
