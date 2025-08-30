@@ -42,5 +42,5 @@ Usage notes:
 - You can delete a field, then add a new one with same name of different type. Tool will try to convert data types between GM and LDTK formats when possible. RECOMMENDATION: After creating a field save the project, then import data from GM again. Else you may lose that field's original values.
 - You can create level fields with "DEPTH_{LAYER_NAME}" name of INT type. This will allow you to import/export depth values for given layers
 
-  Support:
-  You can write me in Discord if you want some help with settings it up: gamerxp. I want to test it on different projects anyway. Just write question right away without any friend requests - to many spammers.
+Support:
+  - You can write me in Discord if you want some help with settings it up: gamerxp. I want to test it on different projects anyway. Just write question right away without any friend requests - to many spammers.
