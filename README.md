@@ -43,4 +43,4 @@ Usage notes:
 - You can create level fields with "DEPTH_{LAYER_NAME}" name of INT type. This will allow you to import/export depth values for given layers
 
 Support:
-  - You can write me in Discord if you want some help with settings it up: gamerxp. I want to test it on different projects anyway. Just write question right away without any friend requests - to many spammers.
+  - You can write me in Discord if you want some help with settings it up: gamerxp. I want to test it on different projects anyway. Just write question right away.
