@@ -253,7 +253,7 @@ internal partial class LDTK2GM
                 bool flipX = false, flipY = false;
                 int? imageIndex = null;
 
-                var sourceProperties = gmInstance.properties.ToDictionary(t => t.varName);
+                var sourceProperties = gmInstance.properties.Where( t => t.varName != null).ToDictionary(t => t.varName);
 
                 foreach (var data in instance.EnumeratePairedResources<LDTKProject.Level.FieldInstance.MetaData, GMOverriddenProperty>(gmInstance.properties, _property => _property.varName))
                 {

@@ -465,7 +465,7 @@ public static class IResourceContainerUtilities
     /// Enumerates pairs of meta and resource, matching by their key.
     /// Either resource or meta may be missing, never both.
     /// </summary>
-    public static IEnumerable<(TMeta? meta, TGMResource? res)> EnumeratePairedResources<TMeta, TGMResource>( this LDTKProject.IResourceContainer _container, IList<TGMResource> _resource, Func<TGMResource, string>? _getKey = null )
+    public static IEnumerable<(TMeta? meta, TGMResource? res)> EnumeratePairedResources<TMeta, TGMResource>( this LDTKProject.IResourceContainer _container, IList<TGMResource> _resource, Func<TGMResource, string?>? _getKey = null )
         where TGMResource : ResourceBase
         where TMeta : IMeta
     {
@@ -492,7 +492,9 @@ public static class IResourceContainerUtilities
         for ( int i = _resource.Count - 1; i >= 0; i-- )
         {
             TGMResource res = _resource[i];
-            string key = _getKey( res );
+            string? key = _getKey( res );
+            if (key == null)
+                continue;
 
             if (knownMeta.TryGetValue(key, out TMeta? meta))
                 knownMeta.Remove(key);
