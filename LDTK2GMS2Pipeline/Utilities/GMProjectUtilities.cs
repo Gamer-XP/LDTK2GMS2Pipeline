@@ -2,12 +2,13 @@
 using System.Reflection;
 using Spectre.Console;
 using YoYoStudio.Resources;
+using YoYoStudio.Resources.YYPSerialiser.Versioning;
 
 namespace LDTK2GMS2Pipeline.Utilities;
 
 public static class GMProjectUtilities
 {
-    public static Task<GMProject> LoadGMProject(FileInfo _file)
+    public static async Task<GMProject> LoadGMProject(FileInfo _file)
     {
         Debug.Assert(_file != null, "GameMaker project file not found");
 
@@ -15,34 +16,14 @@ public static class GMProjectUtilities
         MessageIO.SetDefaultMessageFunctions();
         ResourceInfo.FindAllResources();
         GMProject.LicenseModules = new PlaceholderLicensingModule();
-
-        var loadingWait = new TaskCompletionSource<GMProject>();
         
-        float progress = 0f;
-        GMProject? result = null;
-
-        void TryFinishTask()
-        {
-            if (progress >= 1f && result != null)
-            {
-                Console.WriteLine();
-                loadingWait.TrySetResult(result);
-                result = null;
-            }
-        }
-
         string GenerateProgressLine( float _progress )
         {
             int border = (int)(_progress * 10);
             return $"\rLoading: [{ string.Concat( Enumerable.Range(1, 10).Select( i => i <= border? '-' : ' ' ) ) }] { Math.Round(_progress * 100) }%";
         }
         
-        ProjectInfo.LoadProject(_file.FullName, true, (_r) =>
-        {
-            result = (GMProject)_r;
-            TryFinishTask();
-            AnsiConsole.MarkupLineInterpolated($"Loaded project {_r.name}");
-        }, (_r, _progress) =>
+        GMProject result = await LoadGMProject_2024_1400(_file, (_progress) =>
         {
             try
             {
@@ -54,7 +35,39 @@ public static class GMProjectUtilities
             {
                 //ignored
             }
+        });
+        
+        AnsiConsole.MarkupLineInterpolated($"Loaded project {result.name}");
 
+        return result;
+    }
+
+    /*
+    private static Task<GMProject> LoadGMProject_2023_1( FileInfo _file, Action<float> _onProgressUpdate )
+    {
+        var loadingWait = new TaskCompletionSource<GMProject>();
+        
+        float progress = 0f;
+        GMProject? result = null;
+        
+        void TryFinishTask()
+        {
+            if (progress >= 1f && result != null)
+            {
+                Console.WriteLine();
+                loadingWait.TrySetResult(result);
+                result = null;
+            }
+        }
+        
+        ProjectInfo.LoadProject(_file.FullName, true, (_r) =>
+        {
+            result = (GMProject)_r;
+            TryFinishTask();
+            AnsiConsole.MarkupLineInterpolated($"Loaded project {_r.name}");
+        }, (_r, _progress) =>
+        {
+            _onProgressUpdate?.Invoke(_progress);
             progress = _progress;
             TryFinishTask();
         }, (_r) =>
@@ -62,15 +75,63 @@ public static class GMProjectUtilities
             AnsiConsole.MarkupLineInterpolated($"[red]Failed to load {_r.name}[/]");
             throw new Exception("Failed to load GameMaker project");
         });
-
+        
         return loadingWait.Task;
+    }
+    */
+    
+    private static async Task<GMProject> LoadGMProject_2024_1400( FileInfo _file, Action<float> _onProgressUpdate )
+    {
+        var loadingWait = new TaskCompletionSource<GMProject>();
+        
+        float progress = 0f;
+        GMProject? result = null;
+        
+        void TryFinishTask()
+        {
+            if (progress >= 1f && result != null)
+            {
+                Console.WriteLine();
+                loadingWait.TrySetResult(result);
+                result = null;
+            }
+        }
+
+        await ProjectInfo.LoadProjectOnTask(
+            _file.FullName,
+            true,
+            new VersionChangeRules(false, false), true,
+            _success =>
+            {
+                result = (GMProject)_success.Resource;
+                TryFinishTask();
+            },
+            _fraction =>
+            {
+                _onProgressUpdate?.Invoke(_fraction);
+                progress = _fraction;
+                TryFinishTask();
+            },
+            _failure =>
+            {
+                AnsiConsole.MarkupLineInterpolated($"[red]Failed to load {_failure.AttemptedPath}[/]");
+                throw new Exception("Failed to load GameMaker project");
+            });
+
+        return await loadingWait.Task;
     }
 
     public static Task SaveGMProject(GMProject _project)
     {
         if (!_project.isDirty)
             return Task.CompletedTask;
+        
+        return SaveGMProject_2024_1400(_project);
+    }
 
+    /*
+    private static Task SaveGMProject_2023_1(GMProject _project)
+    {
         var loadingWait = new TaskCompletionSource();
 
         _project.Save(_sender =>
@@ -90,10 +151,37 @@ public static class GMProjectUtilities
 
         return loadingWait.Task;
     }
+    */
+    
+    private static Task SaveGMProject_2024_1400(GMProject _project)
+    {
+        var loadingWait = new TaskCompletionSource();
+        
+        _project.Save( new ResourceBase.SaveParameters() 
+        { 
+            _onSuccess = ( _sender ) =>
+            {
+                Console.WriteLine($"Saved: {_sender.name}");
+                if (_sender == _project)
+                    loadingWait.SetResult();
+            },
+            _onFailed = ( _sender, _ex) =>
+            {
+                loadingWait.SetException(_ex);
+            }
+        });
+
+        return loadingWait.Task;
+    }
+    
+    public static string GetProjectPath( this GMProject _project )
+    {
+        return _project.pathToYYP;
+    }
 
     public static string GetFullPath(string _path, GMProject? _project = null)
     {
-        return Path.Combine(Path.GetDirectoryName(ProjectInfo.GetProjectPath(_project ?? ProjectInfo.Current)), _path);
+        return Path.Combine(Path.GetDirectoryName(GetProjectPath(_project ?? ProjectInfo.Current)), _path);
     }
 
     /// <summary>
@@ -180,6 +268,7 @@ public static class GMProjectUtilities
     class PlaceholderLicensingModule : ILicenseModulesSource
     {
         public IEnumerable<string> Modules { get; } = new List<string>();
+        public void AddMissingOptions() {}
     }
 
 }

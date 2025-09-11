@@ -9,7 +9,7 @@ internal partial class LDTK2GM
 {
     public static async Task ExportToGM( GMProject _gmProject, LDTKProject _ldtkProject )
     {
-        ProjectInfo.IsLoading = false;
+        //ProjectInfo.IsLoading = false;
 
         var matches = InitializeEntityMatches(_gmProject, _ldtkProject);
         

@@ -51,7 +51,7 @@ public class SpriteAtlas
         {
             Sprite = _sprite;
             ImageIndex = _imageIndex;
-            var path = System.IO.Path.Combine( Path.GetDirectoryName( ProjectInfo.GetProjectPath( Sprite.project ) ), Sprite.GetCompositePaths()[_imageIndex] );
+            var path = System.IO.Path.Combine( Path.GetDirectoryName( GMProjectUtilities.GetProjectPath( Sprite.project ) ), Sprite.GetCompositePaths()[_imageIndex] );
             ImagePath = new FileInfo( path );
         }
     }
