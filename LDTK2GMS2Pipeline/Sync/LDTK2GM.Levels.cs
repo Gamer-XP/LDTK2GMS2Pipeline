@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using Dynamitey;
 using LDTK2GMS2Pipeline.LDTK;
 using LDTK2GMS2Pipeline.Utilities;
 using Spectre.Console;
@@ -30,7 +31,9 @@ internal partial class LDTK2GM
             };
             room.parent = _gmProject.FirstRoom?.parent;
             _gmProject.AddResource(room);
-            _gmProject.AddResourceToStorage(room);
+            Dynamic.InvokeMemberAction(_gmProject, nameof(GMProject.AddResourceToStorage), room );
+            // Optional arguments are different in different DLL versions
+            //_gmProject.AddResourceToStorage(room);
             _gmProject.RoomOrder.Add(room);
         }
         else

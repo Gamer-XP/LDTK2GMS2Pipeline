@@ -1,8 +1,10 @@
 ﻿using System.Diagnostics;
+using System.Dynamic;
 using System.Reflection;
+using ImpromptuInterface;
+using LDTK2GMS2Pipeline.Wrapper;
 using Spectre.Console;
 using YoYoStudio.Resources;
-using YoYoStudio.Resources.YYPSerialiser.Versioning;
 
 namespace LDTK2GMS2Pipeline.Utilities;
 
@@ -15,110 +17,35 @@ public static class GMProjectUtilities
         FileIO.SetDefaultFileFunctions();
         MessageIO.SetDefaultMessageFunctions();
         ResourceInfo.FindAllResources();
-        GMProject.LicenseModules = new PlaceholderLicensingModule();
+        GMProject.LicenseModules = new PlaceholderLicensingModule().ActLike<ILicenseModulesSource>();
         
         string GenerateProgressLine( float _progress )
         {
             int border = (int)(_progress * 10);
             return $"\rLoading: [{ string.Concat( Enumerable.Range(1, 10).Select( i => i <= border? '-' : ' ' ) ) }] { Math.Round(_progress * 100) }%";
         }
-        
-        GMProject result = await LoadGMProject_2024_1400(_file, (_progress) =>
+
+        GMProject result = await GMAssemblyUtilities.InvokeTaskWithResult<GMProject>(( _wrapper ) =>
         {
-            try
+            return _wrapper.Load(_file, ( _progress ) =>
             {
-                var pos = Console.GetCursorPosition();
-                Console.Write(GenerateProgressLine(_progress));
-                Console.SetCursorPosition(0, pos.Top);
-            }
-            catch
-            {
-                //ignored
-            }
+                try
+                {
+                    var pos = Console.GetCursorPosition();
+                    Console.Write(GenerateProgressLine(_progress));
+                    Console.SetCursorPosition(0, pos.Top);
+                }
+                catch
+                {
+                    //ignored
+                }
+            });
         });
         
+        Console.WriteLine();
         AnsiConsole.MarkupLineInterpolated($"Loaded project {result.name}");
 
         return result;
-    }
-
-    /*
-    private static Task<GMProject> LoadGMProject_2023_1( FileInfo _file, Action<float> _onProgressUpdate )
-    {
-        var loadingWait = new TaskCompletionSource<GMProject>();
-        
-        float progress = 0f;
-        GMProject? result = null;
-        
-        void TryFinishTask()
-        {
-            if (progress >= 1f && result != null)
-            {
-                Console.WriteLine();
-                loadingWait.TrySetResult(result);
-                result = null;
-            }
-        }
-        
-        ProjectInfo.LoadProject(_file.FullName, true, (_r) =>
-        {
-            result = (GMProject)_r;
-            TryFinishTask();
-            AnsiConsole.MarkupLineInterpolated($"Loaded project {_r.name}");
-        }, (_r, _progress) =>
-        {
-            _onProgressUpdate?.Invoke(_progress);
-            progress = _progress;
-            TryFinishTask();
-        }, (_r) =>
-        {
-            AnsiConsole.MarkupLineInterpolated($"[red]Failed to load {_r.name}[/]");
-            throw new Exception("Failed to load GameMaker project");
-        });
-        
-        return loadingWait.Task;
-    }
-    */
-    
-    private static async Task<GMProject> LoadGMProject_2024_1400( FileInfo _file, Action<float> _onProgressUpdate )
-    {
-        var loadingWait = new TaskCompletionSource<GMProject>();
-        
-        float progress = 0f;
-        GMProject? result = null;
-        
-        void TryFinishTask()
-        {
-            if (progress >= 1f && result != null)
-            {
-                Console.WriteLine();
-                loadingWait.TrySetResult(result);
-                result = null;
-            }
-        }
-
-        await ProjectInfo.LoadProjectOnTask(
-            _file.FullName,
-            true,
-            new VersionChangeRules(false, false), true,
-            _success =>
-            {
-                result = (GMProject)_success.Resource;
-                TryFinishTask();
-            },
-            _fraction =>
-            {
-                _onProgressUpdate?.Invoke(_fraction);
-                progress = _fraction;
-                TryFinishTask();
-            },
-            _failure =>
-            {
-                AnsiConsole.MarkupLineInterpolated($"[red]Failed to load {_failure.AttemptedPath}[/]");
-                throw new Exception("Failed to load GameMaker project");
-            });
-
-        return await loadingWait.Task;
     }
 
     public static Task SaveGMProject(GMProject _project)
@@ -126,57 +53,19 @@ public static class GMProjectUtilities
         if (!_project.isDirty)
             return Task.CompletedTask;
         
-        return SaveGMProject_2024_1400(_project);
+        return GMAssemblyUtilities.InvokeTask(( _wrapper ) => _wrapper.Save(_project));
     }
 
-    /*
-    private static Task SaveGMProject_2023_1(GMProject _project)
-    {
-        var loadingWait = new TaskCompletionSource();
-
-        _project.Save(_sender =>
-            {
-                Console.WriteLine($"Saved: {_sender.name}");
-                if (_sender == _project)
-                    loadingWait.SetResult();
-            }, (_sender, _progress) =>
-            {
-
-            },
-            _sender =>
-            {
-                loadingWait.SetException(new Exception($"Failed to save: {_sender.name}"));
-            });
-
-
-        return loadingWait.Task;
-    }
-    */
+    private static Dictionary<GMProject, string> _projectPathCache = new();
     
-    private static Task SaveGMProject_2024_1400(GMProject _project)
+    public static void SetProjectPath( GMProject _project, string _path )
     {
-        var loadingWait = new TaskCompletionSource();
-        
-        _project.Save( new ResourceBase.SaveParameters() 
-        { 
-            _onSuccess = ( _sender ) =>
-            {
-                Console.WriteLine($"Saved: {_sender.name}");
-                if (_sender == _project)
-                    loadingWait.SetResult();
-            },
-            _onFailed = ( _sender, _ex) =>
-            {
-                loadingWait.SetException(_ex);
-            }
-        });
-
-        return loadingWait.Task;
+        _projectPathCache[_project] = _path;
     }
-    
+
     public static string GetProjectPath( this GMProject _project )
     {
-        return _project.pathToYYP;
+        return _projectPathCache[_project];
     }
 
     public static string GetFullPath(string _path, GMProject? _project = null)
@@ -264,11 +153,10 @@ public static class GMProjectUtilities
         foreach ( var resource in _project.resources.Select( t => t.id ) )
             ResetDirty( resource );
     }
-
-    class PlaceholderLicensingModule : ILicenseModulesSource
+    
+    class PlaceholderLicensingModule : DynamicObject
     {
         public IEnumerable<string> Modules { get; } = new List<string>();
         public void AddMissingOptions() {}
     }
-
 }

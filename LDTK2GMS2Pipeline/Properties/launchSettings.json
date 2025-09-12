@@ -5,16 +5,28 @@
       "workingDirectory": "E:\\Work\\GMS2\\Youki\\ldtk",
       "hotReloadEnabled": false
     },
+    "Youki Import Beta": {
+      "commandName": "Project",
+      "commandLineArgs": "Import Beta",
+      "workingDirectory": "E:\\Work\\GMS2\\Youki\\ldtk",
+      "hotReloadEnabled": false
+    },
+    "Youki Export Beta": {
+      "commandName": "Project",
+      "commandLineArgs": "Export Beta",
+      "workingDirectory": "E:\\Work\\GMS2\\Youki\\ldtk",
+      "hotReloadEnabled": false
+    },
     "Youki Import": {
       "commandName": "Project",
       "commandLineArgs": "Import",
-      "workingDirectory": "E:\\Work\\GMS2\\Youki\\ldtk",
+      "workingDirectory": "E:\\Work\\GMS2\\YoukiOld\\ldtk",
       "hotReloadEnabled": false
     },
     "Youki Export": {
       "commandName": "Project",
       "commandLineArgs": "Export",
-      "workingDirectory": "E:\\Work\\GMS2\\Youki\\ldtk",
+      "workingDirectory": "E:\\Work\\GMS2\\YoukiOld\\ldtk",
       "hotReloadEnabled": false
     }
   }
